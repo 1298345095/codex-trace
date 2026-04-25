@@ -1,0 +1,82 @@
+#![allow(dead_code)]
+
+mod commands;
+mod http_api;
+mod parser;
+mod settings;
+mod state;
+mod watcher;
+
+use tauri::Manager;
+
+pub fn run() {
+    let args: Vec<String> = std::env::args().collect();
+    let web_only = args.iter().any(|a| a == "--web");
+    let headless = args.iter().any(|a| a == "--headless");
+    let no_open = args.iter().any(|a| a == "--no-open");
+    let desktop = !web_only && !headless;
+
+    let mut builder = tauri::Builder::default();
+
+    if desktop {
+        builder = builder.plugin(
+            tauri_plugin_single_instance::Builder::new()
+                .callback(|app, _args, _cwd| {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                })
+                .build(),
+        );
+    }
+
+    builder
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
+        .manage(state::AppState::new())
+        .invoke_handler(tauri::generate_handler![
+            commands::session::load_session,
+            commands::session::watch_session,
+            commands::session::unwatch_session,
+            commands::picker::list_sessions,
+            commands::picker::watch_picker,
+            commands::picker::unwatch_picker,
+            commands::settings::get_settings,
+            commands::settings::set_sessions_dir,
+            switch_to_browser,
+        ])
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(http_api::start_http_server(handle));
+
+            if headless {
+                eprintln!("Headless mode: HTTP API on http://127.0.0.1:11424");
+            } else if web_only {
+                if no_open {
+                    eprintln!("Web mode: http://localhost:1420 (background, no browser)");
+                } else {
+                    eprintln!("Web mode: opening http://localhost:1420 in your browser...");
+                    let _ = tauri_plugin_opener::open_url("http://localhost:1420", None::<&str>);
+                }
+            } else if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+            }
+
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+#[tauri::command]
+async fn switch_to_browser(app: tauri::AppHandle) -> Result<(), String> {
+    tauri_plugin_opener::open_url("http://localhost:1420", None::<&str>)
+        .map_err(|e| e.to_string())?;
+
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+
+    Ok(())
+}

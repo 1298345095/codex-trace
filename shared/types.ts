@@ -1,0 +1,125 @@
+export interface GitInfo {
+  commit_hash?: string;
+  branch?: string;
+  repository_url?: string;
+}
+
+export interface TokenInfo {
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  reasoning_output_tokens: number;
+  total_tokens: number;
+  model_context_window: number;
+}
+
+export interface AgentMessage {
+  text: string;
+  phase: "commentary" | "final_answer" | null;
+  timestamp: string;
+  is_reasoning: boolean;
+}
+
+export interface CollabSpawn {
+  call_id: string;
+  new_thread_id: string;
+  agent_nickname: string;
+  agent_role: string;
+  model?: string | null;
+  reasoning_effort?: string | null;
+  prompt_preview: string;
+}
+
+export type ToolKind =
+  | "exec_command"
+  | "mcp_tool"
+  | "patch_apply"
+  | "web_search"
+  | "image_generation"
+  | "spawn_agent"
+  | "wait_agent"
+  | "close_agent"
+  | "unknown";
+
+export interface CodexToolCall {
+  call_id: string;
+  kind: ToolKind;
+  name: string;
+  arguments: Record<string, unknown>;
+  output: string | null;
+  exit_code: number | null;
+  command: string[] | null;
+  cwd: string | null;
+  duration_secs: number | null;
+  mcp_server: string | null;
+  mcp_tool: string | null;
+  patch_success: boolean | null;
+  patch_changes: Record<string, { type: string; content?: string; unified_diff?: string }> | null;
+  web_query: string | null;
+  web_url: string | null;
+  image_prompt: string | null;
+  status: string;
+}
+
+export interface CodexTurn {
+  turn_id: string;
+  started_at: number | null;
+  completed_at: number | null;
+  duration_ms: number | null;
+  status: "complete" | "aborted" | "ongoing" | "error";
+  user_message: string | null;
+  agent_messages: AgentMessage[];
+  tool_calls: CodexToolCall[];
+  final_answer: string | null;
+  total_tokens: TokenInfo | null;
+  model: string | null;
+  cwd: string | null;
+  reasoning_effort: string | null;
+  error: string | null;
+  has_compaction: boolean;
+  thread_name: string | null;
+  collab_spawns: CollabSpawn[];
+}
+
+export interface CodexSession {
+  id: string;
+  timestamp: string;
+  cwd: string | null;
+  originator: string | null;
+  cli_version: string | null;
+  model_provider: string | null;
+  git: GitInfo | null;
+  instructions: string | null;
+  turns: CodexTurn[];
+  is_ongoing: boolean;
+  total_tokens: TokenInfo | null;
+  thread_name: string | null;
+  spawned_worker_ids: string[];
+  path: string;
+}
+
+export interface CodexSessionInfo {
+  id: string;
+  path: string;
+  cwd: string | null;
+  git_branch: string | null;
+  originator: string | null;
+  model: string | null;
+  cli_version: string | null;
+  thread_name: string | null;
+  turn_count: number;
+  start_time: string;
+  end_time: string | null;
+  total_tokens: number | null;
+  is_ongoing: boolean;
+  is_external_worker: boolean;
+  spawned_worker_ids: string[];
+  date_group: string;
+}
+
+export interface SettingsResponse {
+  sessions_dir: string | null;
+  default_dir: string;
+}
+
+export type ViewState = "picker" | "list" | "detail";
