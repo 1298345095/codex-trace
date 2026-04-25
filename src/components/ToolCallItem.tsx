@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { CodexToolCall } from "../../shared/types";
 import { formatDuration } from "../../shared/format";
+import { formatJson } from "../lib/format";
 
 interface ToolCallItemProps {
   tool: CodexToolCall;
@@ -98,6 +99,9 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
             <div className="tool-call__mcp-info">
               {tool.mcp_server && <span>server: {tool.mcp_server}</span>}
               {tool.mcp_tool && <span> tool: {tool.mcp_tool}</span>}
+              {tool.arguments && Object.keys(tool.arguments).length > 0 && (
+                <pre className="tool-call__args">{formatJson(JSON.stringify(tool.arguments))}</pre>
+              )}
             </div>
           )}
           {tool.kind === "patch_apply" && tool.patch_changes && (

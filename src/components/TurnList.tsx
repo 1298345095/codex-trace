@@ -1,6 +1,7 @@
-import { useRef, useEffect } from "react";
 import type { CodexTurn } from "../../shared/types";
 import { formatDuration, truncate } from "../../shared/format";
+import { useAutoScroll } from "../hooks/useAutoScroll";
+import { useScrollToSelected } from "../hooks/useScrollToSelected";
 import { OngoingDots } from "./OngoingDots";
 
 interface TurnListProps {
@@ -36,12 +37,8 @@ function statusLabel(status: CodexTurn["status"]): string {
 }
 
 export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) {
-  const listRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const item = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex]);
+  const listRef = useAutoScroll<HTMLDivElement>(turns.length);
+  const selectedRef = useScrollToSelected(selectedIndex);
 
   return (
     <div ref={listRef} className="turn-list">
@@ -52,6 +49,7 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
         return (
           <div
             key={turn.turn_id}
+            ref={isSelected ? selectedRef : undefined}
             className={`turn-list__item${isSelected ? " turn-list__item--selected" : ""}`}
             onClick={() => onSelectTurn(i)}
             role="button"

@@ -3080,3 +3080,14 @@ body {
 .tool-call__collab-info {
   font-size: 0.8rem;
 }
+
+/* Tool call argument display */
+.tool-call__args {
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  max-height: 200px;
+  overflow-y: auto;
+}
