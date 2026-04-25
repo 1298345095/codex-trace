@@ -3080,10 +3080,3 @@ body {
 .tool-call__collab-info {
   font-size: 0.8rem;
 }
-
-/* SettingsModal sessions-dir input group */
-.sessions-dir {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
