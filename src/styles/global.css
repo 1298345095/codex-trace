@@ -3026,3 +3026,64 @@ body {
   gap: 8px;
   font-size: 0.7rem;
 }
+
+/* session-picker sub-elements (meta row) */
+.session-picker__model {
+  color: var(--accent);
+  font-size: 0.7rem;
+}
+.session-picker__cwd {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.session-picker__time {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  margin-left: auto;
+}
+.session-picker__turns {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.session-picker__tokens {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* ToolCallItem body sub-elements */
+.tool-call__mcp-info {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.tool-call__patch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tool-call__patch-file {
+  font-size: 0.8rem;
+}
+.tool-call__web {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.tool-call__image-prompt {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.tool-call__collab-info {
+  font-size: 0.8rem;
+}
+
+/* SettingsModal sessions-dir input group */
+.sessions-dir {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

@@ -236,12 +236,14 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 }
             }
             "turn_context" => {
-                if model.is_none() {
-                    model = v
-                        .get("payload")
-                        .and_then(|p| p.get("model"))
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
+                // Always overwrite — spec says "most recent turn_context.payload.model"
+                let m = v
+                    .get("payload")
+                    .and_then(|p| p.get("model"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                if m.is_some() {
+                    model = m;
                 }
             }
             _ => {}
@@ -252,6 +254,11 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
     // We already handle that above by incrementing on first "user_message"
     // For accuracy, re-scan and count task_started events specifically
     // (already done in the loop above — task_started increments turn_count)
+
+    // Sessions with no turns have no active task — not ongoing regardless of event stream.
+    if turn_count == 0 {
+        is_ongoing = false;
+    }
 
     let date_group = date_group_from_path(path);
     let is_external_worker = originator.as_deref() == Some("codex_exec");
