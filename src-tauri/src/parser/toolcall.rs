@@ -136,10 +136,16 @@ impl ToolCallBuilder {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
         let duration_secs = parse_duration(payload);
-        let output = payload
-            .get("stdout")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        // aggregated_output carries the actual command output; stdout is often empty.
+        let output = ["aggregated_output", "stdout", "formatted_output"]
+            .iter()
+            .find_map(|key| {
+                payload
+                    .get(*key)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            });
         let status = str_field(payload, "status");
 
         self.finalized.push(ToolCall {
