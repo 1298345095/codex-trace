@@ -2985,6 +2985,8 @@ body {
   font-size: 0.75rem;
   white-space: pre;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 300px;
   margin: 4px 0 0;
 }
 .tool-call__patch-type {
