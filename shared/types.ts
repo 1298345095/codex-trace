@@ -46,6 +46,7 @@ export interface CodexToolCall {
   kind: ToolKind;
   name: string;
   arguments: Record<string, unknown>;
+  input_text: string | null;
   output: string | null;
   exit_code: number | null;
   command: string[] | null;

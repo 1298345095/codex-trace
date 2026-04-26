@@ -86,6 +86,41 @@ impl ToolCallBuilder {
         );
     }
 
+    /// Finalize a custom_tool_call (apply_patch etc) with its output.
+    pub fn finalize_custom_tool_output(
+        &mut self,
+        call_id: &str,
+        output: &str,
+        exit_code: Option<i32>,
+    ) {
+        if let Some(pending) = self.pending.remove(call_id) {
+            self.finalized.push(ToolCall {
+                call_id: call_id.to_string(),
+                kind: ToolKind::PatchApply,
+                name: pending.name,
+                arguments: pending.arguments,
+                input_text: pending.input_text,
+                output: Some(output.to_string()),
+                exit_code,
+                command: None,
+                cwd: None,
+                duration_secs: None,
+                mcp_server: None,
+                mcp_tool: None,
+                patch_success: exit_code.map(|c| c == 0),
+                patch_changes: None,
+                web_query: None,
+                web_url: None,
+                image_prompt: None,
+                status: if exit_code.unwrap_or(1) == 0 {
+                    "completed".to_string()
+                } else {
+                    "failed".to_string()
+                },
+            });
+        }
+    }
+
     /// Register a function_call_output (no end event → Unknown kind).
     pub fn add_function_call_output(&mut self, call_id: &str, output: &str) {
         if let Some(pending) = self.pending.remove(call_id) {

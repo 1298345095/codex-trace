@@ -153,6 +153,13 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
             </div>
           )}
 
+          {tool.kind === "patch_apply" && !tool.patch_changes && tool.input_text && (
+            <div className="tool-call__section tool-call__section--input">
+              <div className="tool-call__section-title">Patch</div>
+              <pre className="tool-call__diff">{tool.input_text}</pre>
+            </div>
+          )}
+
           {tool.kind === "web_search" && (
             <div className="tool-call__section tool-call__section--input">
               <div className="tool-call__section-title">Query</div>

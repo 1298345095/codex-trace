@@ -540,6 +540,29 @@ fn handle_response_item(
             builder.add_custom_tool_call(call_id, name, input);
         }
 
+        "custom_tool_call_output" => {
+            let call_id = str_field(payload, "call_id");
+            // output field is a JSON string: {"output":"...","metadata":{"exit_code":N,...}}
+            let raw_output = payload.get("output").and_then(|v| v.as_str()).unwrap_or("");
+            let output = serde_json::from_str::<Value>(raw_output)
+                .ok()
+                .and_then(|v| {
+                    v.get("output")
+                        .and_then(|o| o.as_str())
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or_else(|| raw_output.to_string());
+            let exit_code = serde_json::from_str::<Value>(raw_output)
+                .ok()
+                .and_then(|v| {
+                    v.get("metadata")
+                        .and_then(|m| m.get("exit_code"))
+                        .and_then(|c| c.as_i64())
+                        .map(|c| c as i32)
+                });
+            builder.finalize_custom_tool_output(&call_id, &output, exit_code);
+        }
+
         _ => {}
     }
 }
