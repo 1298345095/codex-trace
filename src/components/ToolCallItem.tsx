@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { CodexToolCall } from "../../shared/types";
 import { formatDuration } from "../../shared/format";
 import { formatJson } from "../lib/format";
@@ -13,7 +13,9 @@ import {
   CloseAgentIcon,
   UnknownToolIcon,
   WarningIcon,
+  PopoutIcon,
 } from "./Icons";
+import { PopoutModal } from "./PopoutModal";
 
 interface ToolCallItemProps {
   tool: CodexToolCall;
@@ -68,6 +70,7 @@ function kindClass(kind: CodexToolCall["kind"]): string {
 
 export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
   const handleToggle = useCallback(() => onToggle(), [onToggle]);
+  const [popout, setPopout] = useState(false);
 
   const failed =
     (tool.exit_code !== null && tool.exit_code !== 0) ||
@@ -98,116 +101,146 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
         {tool.duration_secs !== null && (
           <span className="tool-call__duration">{formatDuration(tool.duration_secs * 1000)}</span>
         )}
+        <button
+          className="tool-call__popout-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setPopout(true);
+          }}
+          title="View full content"
+        >
+          <PopoutIcon />
+        </button>
       </div>
 
-      {expanded && (
-        <div className="tool-call__body">
-          {/* Input section */}
-          {tool.kind === "exec_command" && (tool.command || tool.arguments) && (
-            <div className="tool-call__section tool-call__section--input">
-              <div className="tool-call__section-title">Command</div>
-              {tool.command ? (
-                <pre className="tool-call__cmd">{tool.command.join(" ")}</pre>
-              ) : (
-                <pre className="tool-call__json">
-                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
-                </pre>
-              )}
-              {tool.cwd && <div className="tool-call__cwd">cwd: {tool.cwd}</div>}
-            </div>
-          )}
+      {expanded && <ToolCallBody tool={tool} />}
 
-          {tool.kind === "mcp_tool" && (
-            <div className="tool-call__section tool-call__section--input">
-              <div className="tool-call__section-title">Input</div>
-              <div className="tool-call__mcp-info">
-                {tool.mcp_server && (
-                  <span className="tool-call__mcp-server">{tool.mcp_server}</span>
+      {popout && (
+        <PopoutModal
+          onClose={() => setPopout(false)}
+          header={
+            <>
+              <span className="tool-call__icon">{kindIcon(tool.kind, failed)}</span>
+              <span className="popout-modal__name">{tool.name}</span>
+              {tool.exit_code !== null && (
+                <span
+                  className={`tool-call__exit${tool.exit_code !== 0 ? " tool-call__exit--fail" : ""}`}
+                >
+                  exit {tool.exit_code}
+                </span>
+              )}
+            </>
+          }
+        >
+          <ToolCallBody tool={tool} popout />
+        </PopoutModal>
+      )}
+    </div>
+  );
+}
+
+function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: boolean }) {
+  const cls = popout ? "tool-call__body tool-call__body--popout" : "tool-call__body";
+  return (
+    <div className={cls}>
+      {/* Input section */}
+      {tool.kind === "exec_command" && (tool.command || tool.arguments) && (
+        <div className="tool-call__section tool-call__section--input">
+          <div className="tool-call__section-title">Command</div>
+          {tool.command ? (
+            <pre className="tool-call__cmd">{tool.command.join(" ")}</pre>
+          ) : (
+            <pre className="tool-call__json">
+              <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+            </pre>
+          )}
+          {tool.cwd && <div className="tool-call__cwd">cwd: {tool.cwd}</div>}
+        </div>
+      )}
+
+      {tool.kind === "mcp_tool" && (
+        <div className="tool-call__section tool-call__section--input">
+          <div className="tool-call__section-title">Input</div>
+          <div className="tool-call__mcp-info">
+            {tool.mcp_server && <span className="tool-call__mcp-server">{tool.mcp_server}</span>}
+            {tool.mcp_tool && <span className="tool-call__mcp-tool"> / {tool.mcp_tool}</span>}
+          </div>
+          {tool.arguments && Object.keys(tool.arguments).length > 0 && (
+            <pre className="tool-call__json">
+              <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+            </pre>
+          )}
+        </div>
+      )}
+
+      {tool.kind === "patch_apply" && tool.patch_changes && (
+        <div className="tool-call__section tool-call__section--input">
+          <div className="tool-call__section-title">Changes</div>
+          <div className="tool-call__patch">
+            {Object.entries(tool.patch_changes).map(([file, change]) => (
+              <div key={file} className="tool-call__patch-file">
+                <span className={`tool-call__patch-type tool-call__patch-type--${change.type}`}>
+                  {change.type}
+                </span>{" "}
+                {file}
+                {change.unified_diff && (
+                  <pre className="tool-call__diff">{change.unified_diff}</pre>
                 )}
-                {tool.mcp_tool && <span className="tool-call__mcp-tool"> / {tool.mcp_tool}</span>}
               </div>
-              {tool.arguments && Object.keys(tool.arguments).length > 0 && (
-                <pre className="tool-call__json">
-                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
-                </pre>
-              )}
-            </div>
-          )}
+            ))}
+          </div>
+        </div>
+      )}
 
-          {tool.kind === "patch_apply" && tool.patch_changes && (
-            <div className="tool-call__section tool-call__section--input">
-              <div className="tool-call__section-title">Changes</div>
-              <div className="tool-call__patch">
-                {Object.entries(tool.patch_changes).map(([file, change]) => (
-                  <div key={file} className="tool-call__patch-file">
-                    <span className={`tool-call__patch-type tool-call__patch-type--${change.type}`}>
-                      {change.type}
-                    </span>{" "}
-                    {file}
-                    {change.unified_diff && (
-                      <pre className="tool-call__diff">{change.unified_diff}</pre>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+      {tool.kind === "patch_apply" && !tool.patch_changes && tool.input_text && (
+        <div className="tool-call__section tool-call__section--input">
+          <div className="tool-call__section-title">Patch</div>
+          <pre className="tool-call__diff">{tool.input_text}</pre>
+        </div>
+      )}
 
-          {tool.kind === "patch_apply" && !tool.patch_changes && tool.input_text && (
-            <div className="tool-call__section tool-call__section--input">
-              <div className="tool-call__section-title">Patch</div>
-              <pre className="tool-call__diff">{tool.input_text}</pre>
-            </div>
-          )}
+      {tool.kind === "web_search" && (
+        <div className="tool-call__section tool-call__section--input">
+          <div className="tool-call__section-title">Query</div>
+          <div className="tool-call__web">
+            {tool.web_query && <div>{tool.web_query}</div>}
+            {tool.web_url && <div className="tool-call__web-url">{tool.web_url}</div>}
+          </div>
+        </div>
+      )}
 
-          {tool.kind === "web_search" && (
-            <div className="tool-call__section tool-call__section--input">
-              <div className="tool-call__section-title">Query</div>
-              <div className="tool-call__web">
-                {tool.web_query && <div>{tool.web_query}</div>}
-                {tool.web_url && <div className="tool-call__web-url">{tool.web_url}</div>}
-              </div>
-            </div>
-          )}
+      {tool.kind === "image_generation" && tool.image_prompt && (
+        <div className="tool-call__section tool-call__section--input">
+          <div className="tool-call__section-title">Prompt</div>
+          <div className="tool-call__image-prompt">{tool.image_prompt}</div>
+        </div>
+      )}
 
-          {tool.kind === "image_generation" && tool.image_prompt && (
-            <div className="tool-call__section tool-call__section--input">
-              <div className="tool-call__section-title">Prompt</div>
-              <div className="tool-call__image-prompt">{tool.image_prompt}</div>
-            </div>
-          )}
+      {(tool.kind === "spawn_agent" || tool.kind === "wait_agent" || tool.kind === "close_agent") &&
+        Object.keys(tool.arguments ?? {}).length > 0 && (
+          <div className="tool-call__section tool-call__section--input">
+            <div className="tool-call__section-title">Arguments</div>
+            <pre className="tool-call__json">
+              <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+            </pre>
+          </div>
+        )}
 
-          {(tool.kind === "spawn_agent" ||
-            tool.kind === "wait_agent" ||
-            tool.kind === "close_agent") &&
-            Object.keys(tool.arguments ?? {}).length > 0 && (
-              <div className="tool-call__section tool-call__section--input">
-                <div className="tool-call__section-title">Arguments</div>
-                <pre className="tool-call__json">
-                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
-                </pre>
-              </div>
-            )}
+      {tool.kind === "unknown" &&
+        tool.arguments != null &&
+        Object.keys(tool.arguments).length > 0 && (
+          <div className="tool-call__section tool-call__section--input">
+            <div className="tool-call__section-title">Input</div>
+            <pre className="tool-call__json">
+              <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+            </pre>
+          </div>
+        )}
 
-          {/* Unknown kind — show raw arguments as input */}
-          {tool.kind === "unknown" &&
-            tool.arguments != null &&
-            Object.keys(tool.arguments).length > 0 && (
-              <div className="tool-call__section tool-call__section--input">
-                <div className="tool-call__section-title">Input</div>
-                <pre className="tool-call__json">
-                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
-                </pre>
-              </div>
-            )}
-
-          {/* Output / Result section */}
-          {tool.output !== null && (
-            <div className="tool-call__section tool-call__section--output">
-              <div className="tool-call__section-title">Output</div>
-              <pre className="tool-call__output">{tool.output}</pre>
-            </div>
-          )}
+      {tool.output !== null && (
+        <div className="tool-call__section tool-call__section--output">
+          <div className="tool-call__section-title">Output</div>
+          <pre className="tool-call__output">{tool.output}</pre>
         </div>
       )}
     </div>

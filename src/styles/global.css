@@ -2995,6 +2995,116 @@ body {
   max-height: 300px;
   margin: 4px 0 0;
 }
+.tool-call__popout-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.tool-call__popout-btn:hover {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
+/* Popout body: remove max-height constraints */
+.tool-call__body--popout .tool-call__output,
+.tool-call__body--popout .tool-call__diff {
+  max-height: none;
+  overflow: visible;
+}
+.tool-call__body--popout .tool-call__json pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Popout Modal ---- */
+
+.popout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.popout-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  max-width: 95vw;
+  max-height: 95vh;
+}
+.popout-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-width: 0;
+}
+.popout-modal__name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.popout-modal__close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+}
+.popout-modal__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.popout-modal__body {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+  min-height: 0;
+  min-width: 0;
+}
+.popout-modal__resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+.popout-modal__resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-dim);
+  border-bottom: 2px solid var(--text-dim);
+  opacity: 0.5;
+}
+
 .tool-call__patch-type {
   font-weight: 600;
 }

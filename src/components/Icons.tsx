@@ -13,6 +13,7 @@ import {
   VscTools,
   VscWatch,
   VscLightbulbEmpty,
+  VscLinkExternal,
 } from "react-icons/vsc";
 import { MdOutlineGeneratingTokens, MdOutlineImage } from "react-icons/md";
 import { GoGitMerge } from "react-icons/go";
@@ -97,4 +98,8 @@ export function DurationIcon() {
 
 export function ThinkingIcon() {
   return <VscLightbulbEmpty className="icon--thinking" />;
+}
+
+export function PopoutIcon() {
+  return <VscLinkExternal />;
 }
