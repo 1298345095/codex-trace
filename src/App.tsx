@@ -175,36 +175,29 @@ export function App() {
             />
           )}
 
-          {(view === "list" || view === "detail") && session.session && (
-            <div className="app__panels">
-              <div className="app__turn-list">
-                <TurnList
-                  turns={turns}
-                  selectedIndex={selectedTurn}
-                  onSelectTurn={(i) => {
-                    setSelectedTurn(i);
-                    if (view !== "detail") setView("detail");
-                  }}
-                />
-              </div>
-              {view === "detail" && turns[selectedTurn] && (
-                <>
-                  <ResizeHandle onResize={() => {}} />
-                  <div className="app__turn-detail">
-                    <TurnDetail
-                      turn={turns[selectedTurn]}
-                      expanded={expandedTools}
-                      onToggle={toggleTool}
-                      onLoadWorker={handleLoadWorker}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
+          {view === "list" && session.loading && (
+            <div className="app__loading">Loading session…</div>
           )}
 
-          {(view === "list" || view === "detail") && session.loading && (
-            <div className="app__loading">Loading session…</div>
+          {view === "list" && !session.loading && session.session && (
+            <TurnList
+              turns={turns}
+              selectedIndex={selectedTurn}
+              onSelectTurn={(i) => {
+                setSelectedTurn(i);
+                setView("detail");
+              }}
+            />
+          )}
+
+          {view === "detail" && turns[selectedTurn] && (
+            <TurnDetail
+              turn={turns[selectedTurn]}
+              expanded={expandedTools}
+              onToggle={toggleTool}
+              onBack={() => setView("list")}
+              onLoadWorker={handleLoadWorker}
+            />
           )}
         </div>
       </div>

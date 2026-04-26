@@ -14,10 +14,10 @@ import {
   VscWatch,
   VscLightbulbEmpty,
 } from "react-icons/vsc";
-import { MdOutlineGeneratingTokens } from "react-icons/md";
+import { MdOutlineGeneratingTokens, MdOutlineImage } from "react-icons/md";
 import { GoGitMerge } from "react-icons/go";
 import { AiOutlineRobot } from "react-icons/ai";
-import { MdOutlineImage } from "react-icons/md";
+import { CodexOpenai } from "@thesvg/react";
 
 export function ExecIcon() {
   return <VscTerminalBash className="icon--bash" />;
@@ -75,8 +75,8 @@ export function UserIcon() {
   return <VscAccount className="icon--user" />;
 }
 
-export function CodexIcon() {
-  return <VscHubot className="icon--codex" />;
+export function CodexIcon({ className }: { className?: string }) {
+  return <CodexOpenai className={`icon--codex ${className ?? ""}`} />;
 }
 
 export function ForwardIcon() {

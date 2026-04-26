@@ -3,14 +3,18 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { CodexTurn } from "../../shared/types";
-import { TokenBar } from "./TokenBar";
 import { ToolCallItem } from "./ToolCallItem";
 import { OngoingDots } from "./OngoingDots";
+import { BackIcon, CodexIcon } from "./Icons";
+import { shortModel } from "../lib/format";
+import { getModelColor } from "../lib/theme";
+import { formatTokens, formatDuration } from "../../shared/format";
 
 interface TurnDetailProps {
   turn: CodexTurn;
   expanded: Set<number>;
   onToggle: (i: number) => void;
+  onBack: () => void;
   onLoadWorker?: (sessionId: string) => void;
 }
 
@@ -39,35 +43,36 @@ function MarkdownRenderer({ content }: { content: string }) {
   );
 }
 
-export function TurnDetail({ turn, expanded, onToggle, onLoadWorker }: TurnDetailProps) {
+export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: TurnDetailProps) {
   const commentary = turn.agent_messages.filter(
     (m) => m.phase !== "final_answer" && !m.is_reasoning,
   );
   const reasoning = turn.agent_messages.filter((m) => m.is_reasoning);
   const finalAnswer = turn.agent_messages.find((m) => m.phase === "final_answer");
+  const model = turn.model ? shortModel(turn.model) : "";
+  const modelColor = turn.model ? getModelColor(turn.model) : undefined;
+
+  const metaParts: string[] = [];
+  if (turn.total_tokens?.total_tokens) metaParts.push(`${formatTokens(turn.total_tokens.total_tokens)} tok`);
+  if (turn.duration_ms) metaParts.push(formatDuration(turn.duration_ms));
 
   return (
     <div className="turn-detail">
-      <div className="turn-detail__header">
-        <span className="turn-detail__status">
-          {turn.status === "ongoing" ? <OngoingDots count={5} /> : turn.status}
-        </span>
-        {turn.model && <span className="turn-detail__model">{turn.model}</span>}
-        {turn.reasoning_effort && (
-          <span className="turn-detail__effort">{turn.reasoning_effort}</span>
+      <div className="message-detail__header">
+        <button className="message-detail__back" onClick={onBack}>
+          <BackIcon /> Back
+        </button>
+        <span className="message-detail__role-icon"><CodexIcon /></span>
+        <span className="message-detail__title">Codex</span>
+        {model && <span style={{ color: modelColor, fontWeight: 600, fontSize: 12 }}>{model}</span>}
+        {turn.status === "ongoing" && <OngoingDots count={3} />}
+        {metaParts.length > 0 && (
+          <span className="message-detail__meta">{metaParts.join(" · ")}</span>
         )}
-        {turn.total_tokens && <TokenBar tokens={turn.total_tokens} />}
       </div>
 
-      {turn.user_message && (
-        <div className="turn-detail__section turn-detail__section--user">
-          <div className="turn-detail__section-label">User</div>
-          <div className="turn-detail__markdown">
-            <MarkdownRenderer content={turn.user_message} />
-          </div>
-        </div>
-      )}
-
+      <div className="turn-detail__body">
+      <div className="turn-detail__content">
       {turn.error && (
         <div className="turn-detail__section turn-detail__section--error">
           <div className="turn-detail__section-label">Error</div>
@@ -92,6 +97,15 @@ export function TurnDetail({ turn, expanded, onToggle, onLoadWorker }: TurnDetai
               <MarkdownRenderer content={msg.text} />
             </div>
           ))}
+        </div>
+      )}
+
+      {finalAnswer && (
+        <div className="turn-detail__section turn-detail__section--final">
+          <div className="turn-detail__section-label">Final answer</div>
+          <div className="turn-detail__markdown">
+            <MarkdownRenderer content={finalAnswer.text} />
+          </div>
         </div>
       )}
 
@@ -137,18 +151,11 @@ export function TurnDetail({ turn, expanded, onToggle, onLoadWorker }: TurnDetai
         </div>
       )}
 
-      {finalAnswer && (
-        <div className="turn-detail__section turn-detail__section--final">
-          <div className="turn-detail__section-label">Final answer</div>
-          <div className="turn-detail__markdown">
-            <MarkdownRenderer content={finalAnswer.text} />
-          </div>
-        </div>
-      )}
-
       {turn.has_compaction && (
         <div className="turn-detail__compaction-note">Context was compacted in this turn.</div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

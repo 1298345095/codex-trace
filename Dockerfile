@@ -62,10 +62,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 COPY src-tauri ./src-tauri
-COPY --from=frontend-builder /build/dist ./dist
 
 WORKDIR /build/src-tauri
-RUN cargo build --release --locked --bin codex-trace
+# Fat LTO (lto=true in Cargo.toml) loads all program bitcode at once and OOMs
+# in memory-constrained Docker builds. Thin LTO delivers most of the same
+# optimisation while keeping peak RSS under control.
+RUN CARGO_PROFILE_RELEASE_LTO=thin cargo build --release --locked --jobs 2 --bin codex-trace
+
+WORKDIR /build
+COPY --from=frontend-builder /build/dist ./dist
 
 # -----------------------------------------------------------------------------
 # Stage 3 — runtime image

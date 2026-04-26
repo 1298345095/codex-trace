@@ -103,10 +103,16 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
       {expanded && (
         <div className="tool-call__body">
           {/* Input section */}
-          {tool.kind === "exec_command" && tool.command && (
+          {tool.kind === "exec_command" && (tool.command || tool.arguments) && (
             <div className="tool-call__section tool-call__section--input">
               <div className="tool-call__section-title">Command</div>
-              <pre className="tool-call__cmd">{tool.command.join(" ")}</pre>
+              {tool.command ? (
+                <pre className="tool-call__cmd">{tool.command.join(" ")}</pre>
+              ) : (
+                <pre className="tool-call__json">
+                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+                </pre>
+              )}
               {tool.cwd && <div className="tool-call__cwd">cwd: {tool.cwd}</div>}
             </div>
           )}
@@ -170,6 +176,18 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
             Object.keys(tool.arguments ?? {}).length > 0 && (
               <div className="tool-call__section tool-call__section--input">
                 <div className="tool-call__section-title">Arguments</div>
+                <pre className="tool-call__json">
+                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+                </pre>
+              </div>
+            )}
+
+          {/* Unknown kind — show raw arguments as input */}
+          {tool.kind === "unknown" &&
+            tool.arguments != null &&
+            Object.keys(tool.arguments).length > 0 && (
+              <div className="tool-call__section tool-call__section--input">
+                <div className="tool-call__section-title">Input</div>
                 <pre className="tool-call__json">
                   <code>{formatJson(JSON.stringify(tool.arguments))}</code>
                 </pre>

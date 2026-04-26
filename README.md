@@ -1,5 +1,7 @@
 # Codex Trace
 
+> If you use Claude Code, see [claude-code-trace](https://github.com/delexw/claude-code-trace)
+
 [![CI](https://github.com/PixelPaw-Labs/codex-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/PixelPaw-Labs/codex-trace/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.77.2%2B-orange?logo=rust)](https://www.rust-lang.org/)
