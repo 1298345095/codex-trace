@@ -369,7 +369,7 @@ fn handle_event_msg(
                 let builder = tool_builders
                     .entry(tid.clone())
                     .or_insert_with(ToolCallBuilder::new);
-                builder.finalize_exec(payload);
+                builder.finalize_exec(msg_type, payload);
             }
         }
 
@@ -378,7 +378,7 @@ fn handle_event_msg(
                 let builder = tool_builders
                     .entry(tid.clone())
                     .or_insert_with(ToolCallBuilder::new);
-                builder.finalize_mcp(payload);
+                builder.finalize_mcp(msg_type, payload);
             }
         }
 
@@ -387,7 +387,7 @@ fn handle_event_msg(
                 let builder = tool_builders
                     .entry(tid.clone())
                     .or_insert_with(ToolCallBuilder::new);
-                builder.finalize_patch(payload);
+                builder.finalize_patch(msg_type, payload);
             }
         }
 
@@ -396,7 +396,7 @@ fn handle_event_msg(
                 let builder = tool_builders
                     .entry(tid.clone())
                     .or_insert_with(ToolCallBuilder::new);
-                builder.add_web_search(payload);
+                builder.add_web_search(msg_type, payload);
             }
         }
 
@@ -433,7 +433,7 @@ fn handle_event_msg(
                 let builder = tool_builders
                     .entry(tid.clone())
                     .or_insert_with(ToolCallBuilder::new);
-                builder.finalize_spawn(payload);
+                builder.finalize_spawn(msg_type, payload);
             }
         }
 
@@ -442,7 +442,7 @@ fn handle_event_msg(
                 let builder = tool_builders
                     .entry(tid.clone())
                     .or_insert_with(ToolCallBuilder::new);
-                builder.finalize_wait(payload);
+                builder.finalize_wait(msg_type, payload);
             }
         }
 
@@ -451,7 +451,16 @@ fn handle_event_msg(
                 let builder = tool_builders
                     .entry(tid.clone())
                     .or_insert_with(ToolCallBuilder::new);
-                builder.finalize_close(payload);
+                builder.finalize_close(msg_type, payload);
+            }
+        }
+
+        other if other.ends_with("_end") => {
+            if let Some(ref tid) = current_turn_id {
+                let builder = tool_builders
+                    .entry(tid.clone())
+                    .or_insert_with(ToolCallBuilder::new);
+                builder.finalize_unknown_end(other, payload);
             }
         }
 

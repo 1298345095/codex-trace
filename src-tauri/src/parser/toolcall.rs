@@ -113,13 +113,13 @@ impl ToolCallBuilder {
     }
 
     /// Finalize with exec_command_end event.
-    pub fn finalize_exec(&mut self, payload: &Value) {
+    pub fn finalize_exec(&mut self, event_type: &str, payload: &Value) {
         let call_id = str_field(payload, "call_id");
         let pending = self
             .pending
             .remove(&call_id)
             .unwrap_or_else(|| PendingCall {
-                name: "exec_command".to_string(),
+                name: kind_name(event_type),
                 arguments: Value::Null,
                 input_text: None,
             });
@@ -171,13 +171,13 @@ impl ToolCallBuilder {
     }
 
     /// Finalize with mcp_tool_call_end event.
-    pub fn finalize_mcp(&mut self, payload: &Value) {
+    pub fn finalize_mcp(&mut self, event_type: &str, payload: &Value) {
         let call_id = str_field(payload, "call_id");
         let pending = self
             .pending
             .remove(&call_id)
             .unwrap_or_else(|| PendingCall {
-                name: "mcp_tool".to_string(),
+                name: kind_name(event_type),
                 arguments: Value::Null,
                 input_text: None,
             });
@@ -224,13 +224,13 @@ impl ToolCallBuilder {
     }
 
     /// Finalize with patch_apply_end event.
-    pub fn finalize_patch(&mut self, payload: &Value) {
+    pub fn finalize_patch(&mut self, event_type: &str, payload: &Value) {
         let call_id = str_field(payload, "call_id");
         let pending = self
             .pending
             .remove(&call_id)
             .unwrap_or_else(|| PendingCall {
-                name: "apply_patch".to_string(),
+                name: kind_name(event_type),
                 arguments: Value::Null,
                 input_text: None,
             });
@@ -265,14 +265,14 @@ impl ToolCallBuilder {
     }
 
     /// Finalize with collab_agent_spawn_end event.
-    pub fn finalize_spawn(&mut self, payload: &Value) {
+    pub fn finalize_spawn(&mut self, event_type: &str, payload: &Value) {
         let call_id = str_field(payload, "call_id");
-        let _ = self.pending.remove(&call_id);
+        let pending_name = self.pending.remove(&call_id).map(|p| p.name);
 
         self.finalized.push(ToolCall {
             call_id,
             kind: ToolKind::SpawnAgent,
-            name: "spawn_agent".to_string(),
+            name: pending_name.unwrap_or_else(|| kind_name(event_type)),
             arguments: payload.clone(),
             input_text: None,
             output: None,
@@ -292,14 +292,14 @@ impl ToolCallBuilder {
     }
 
     /// Finalize with collab_waiting_end event.
-    pub fn finalize_wait(&mut self, payload: &Value) {
+    pub fn finalize_wait(&mut self, event_type: &str, payload: &Value) {
         let call_id = str_field(payload, "call_id");
-        let _ = self.pending.remove(&call_id);
+        let pending_name = self.pending.remove(&call_id).map(|p| p.name);
 
         self.finalized.push(ToolCall {
             call_id,
             kind: ToolKind::WaitAgent,
-            name: "wait_agent".to_string(),
+            name: pending_name.unwrap_or_else(|| kind_name(event_type)),
             arguments: payload.clone(),
             input_text: None,
             output: None,
@@ -319,14 +319,14 @@ impl ToolCallBuilder {
     }
 
     /// Finalize with collab_close_end event.
-    pub fn finalize_close(&mut self, payload: &Value) {
+    pub fn finalize_close(&mut self, event_type: &str, payload: &Value) {
         let call_id = str_field(payload, "call_id");
-        let _ = self.pending.remove(&call_id);
+        let pending_name = self.pending.remove(&call_id).map(|p| p.name);
 
         self.finalized.push(ToolCall {
             call_id,
             kind: ToolKind::CloseAgent,
-            name: "close_agent".to_string(),
+            name: pending_name.unwrap_or_else(|| kind_name(event_type)),
             arguments: payload.clone(),
             input_text: None,
             output: None,
@@ -346,8 +346,9 @@ impl ToolCallBuilder {
     }
 
     /// Finalize web_search (no call_id pairing — best-effort).
-    pub fn add_web_search(&mut self, payload: &Value) {
+    pub fn add_web_search(&mut self, event_type: &str, payload: &Value) {
         let call_id = str_field(payload, "call_id");
+        let pending_name = self.pending.remove(&call_id).map(|p| p.name);
         let query = payload
             .get("query")
             .and_then(|v| v.as_str())
@@ -361,7 +362,7 @@ impl ToolCallBuilder {
         self.finalized.push(ToolCall {
             call_id,
             kind: ToolKind::WebSearch,
-            name: "web_search".to_string(),
+            name: pending_name.unwrap_or_else(|| kind_name(event_type)),
             arguments: payload.clone(),
             input_text: None,
             output: None,
@@ -377,6 +378,48 @@ impl ToolCallBuilder {
             web_url,
             image_prompt: None,
             status: "completed".to_string(),
+        });
+    }
+
+    /// Catch-all for any unrecognised *_end event — preserves name from pending.
+    pub fn finalize_unknown_end(&mut self, event_type: &str, payload: &Value) {
+        let call_id = str_field(payload, "call_id");
+        let pending = self
+            .pending
+            .remove(&call_id)
+            .unwrap_or_else(|| PendingCall {
+                name: kind_name(event_type),
+                arguments: Value::Null,
+                input_text: None,
+            });
+        let output = ["output", "aggregated_output", "stdout"]
+            .iter()
+            .find_map(|key| {
+                payload
+                    .get(*key)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            });
+        self.finalized.push(ToolCall {
+            call_id,
+            kind: ToolKind::Unknown,
+            name: pending.name,
+            arguments: pending.arguments,
+            input_text: pending.input_text,
+            output,
+            exit_code: None,
+            command: None,
+            cwd: None,
+            duration_secs: parse_duration(payload),
+            mcp_server: None,
+            mcp_tool: None,
+            patch_success: None,
+            patch_changes: None,
+            web_query: None,
+            web_url: None,
+            image_prompt: None,
+            status: str_field(payload, "status"),
         });
     }
 
@@ -417,6 +460,13 @@ impl ToolCallBuilder {
         self.finalized
             .retain(|tc| tc.kind != ToolKind::Unknown || !paired.contains(&tc.call_id));
     }
+}
+
+fn kind_name(event_type: &str) -> String {
+    event_type
+        .strip_suffix("_end")
+        .unwrap_or(event_type)
+        .to_string()
 }
 
 fn str_field(v: &Value, key: &str) -> String {
