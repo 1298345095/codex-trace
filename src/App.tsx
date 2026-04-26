@@ -10,6 +10,7 @@ import { TurnList } from "./components/TurnList";
 import { TurnDetail } from "./components/TurnDetail";
 import { InfoBar } from "./components/InfoBar";
 import { KeybindBar } from "./components/KeybindBar";
+import { ViewToolbar } from "./components/ViewToolbar";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { SettingsModal } from "./components/SettingsModal";
 
@@ -24,7 +25,12 @@ export function App() {
 
   const session = useSession();
   const picker = usePicker();
-  const { clear: clearTools } = useToggleSet();
+  const {
+    set: expandedTools,
+    toggle: toggleTool,
+    clear: clearTools,
+    addAll: addAllTools,
+  } = useToggleSet();
 
   const { loadSession } = session;
   const { discoverSessions, updateSessionOngoing } = picker;
@@ -74,6 +80,27 @@ export function App() {
 
   const turns = session.session?.turns ?? [];
 
+  const expandAll = useCallback(() => {
+    if (view === "detail") {
+      const currentTurns = session.session?.turns ?? [];
+      if (currentTurns[selectedTurn]) {
+        addAllTools(currentTurns[selectedTurn].tool_calls.map((_, i) => i));
+      }
+    }
+  }, [view, session.session, selectedTurn, addAllTools]);
+
+  const collapseAll = useCallback(() => clearTools(), [clearTools]);
+
+  const goToSessions = useCallback(() => setView("picker"), []);
+
+  const handleLoadWorker = useCallback(
+    (sessionId: string) => {
+      const worker = picker.allSessions.find((s) => s.id === sessionId);
+      if (worker) handleSelectSession(worker);
+    },
+    [picker.allSessions, handleSelectSession],
+  );
+
   // Keyboard navigation
   useKeyboard({
     j: () => {
@@ -98,49 +125,57 @@ export function App() {
       else if (view === "list") setView("picker");
     },
     ",": () => setShowSettings(true),
+    "?": () => setShowKeybinds((p) => !p),
   });
 
   return (
     <div className="app">
-      {/* Left sidebar */}
-      <div className="app__sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
-        <div className="app__sidebar-header">
-          <span className="app__sidebar-title">Codex Trace</span>
-          <button
-            className="app__settings-btn"
-            onClick={() => setShowSettings(true)}
-            title="Settings (,)"
-          >
-            ⚙
-          </button>
-        </div>
-        <SidebarTree
-          sessions={picker.allSessions}
-          selectedPath={session.sessionPath || null}
-          collapsedDates={collapsedDates}
-          onSelectSession={handleSelectSession}
-          onToggleDate={handleToggleDate}
-        />
-      </div>
+      {/* Info bar — only when session loaded and not in picker */}
+      {session.sessionPath && view !== "picker" && session.session && (
+        <InfoBar session={session.session} />
+      )}
 
-      <ResizeHandle onResize={setSidebarWidth} />
+      {/* View toolbar */}
+      <ViewToolbar
+        view={view}
+        hasSession={!!session.sessionPath}
+        onGoToSessions={goToSessions}
+        onExpandAll={expandAll}
+        onCollapseAll={collapseAll}
+        onOpenSettings={() => setShowSettings(true)}
+      />
 
-      {/* Main content */}
-      <div className="app__main">
-        {view === "picker" && (
-          <SessionPicker
-            sessions={picker.sessions}
-            loading={picker.loading}
-            searchQuery={picker.searchQuery}
-            selectedIndex={pickerSelected}
+      <div className="app-body">
+        {/* Left sidebar */}
+        <div className="app__sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
+          <div className="app__sidebar-header">
+            <span className="app__sidebar-title">SESSIONS</span>
+          </div>
+          <SidebarTree
+            sessions={picker.allSessions}
+            selectedPath={session.sessionPath || null}
+            collapsedDates={collapsedDates}
             onSelectSession={handleSelectSession}
-            onSearchChange={picker.setSearchQuery}
+            onToggleDate={handleToggleDate}
           />
-        )}
+        </div>
 
-        {(view === "list" || view === "detail") && session.session && (
-          <>
-            <InfoBar session={session.session} />
+        <ResizeHandle onResize={setSidebarWidth} />
+
+        {/* Main content */}
+        <div className="main-content">
+          {view === "picker" && (
+            <SessionPicker
+              sessions={picker.sessions}
+              loading={picker.loading}
+              searchQuery={picker.searchQuery}
+              selectedIndex={pickerSelected}
+              onSelectSession={handleSelectSession}
+              onSearchChange={picker.setSearchQuery}
+            />
+          )}
+
+          {(view === "list" || view === "detail") && session.session && (
             <div className="app__panels">
               <div className="app__turn-list">
                 <TurnList
@@ -156,17 +191,22 @@ export function App() {
                 <>
                   <ResizeHandle onResize={() => {}} />
                   <div className="app__turn-detail">
-                    <TurnDetail turn={turns[selectedTurn]} />
+                    <TurnDetail
+                      turn={turns[selectedTurn]}
+                      expanded={expandedTools}
+                      onToggle={toggleTool}
+                      onLoadWorker={handleLoadWorker}
+                    />
                   </div>
                 </>
               )}
             </div>
-          </>
-        )}
+          )}
 
-        {(view === "list" || view === "detail") && session.loading && (
-          <div className="app__loading">Loading session…</div>
-        )}
+          {(view === "list" || view === "detail") && session.loading && (
+            <div className="app__loading">Loading session…</div>
+          )}
+        </div>
       </div>
 
       {/* Bottom keybind bar */}

@@ -1,7 +1,13 @@
-import { useRef, useEffect } from "react";
+import { useRef, useMemo } from "react";
 import type { CodexSessionInfo } from "../../shared/types";
 import { formatTokens, shortPath, timeAgo, truncate } from "../../shared/format";
+import { shortModel } from "../lib/format";
+import { getModelColor } from "../lib/theme";
 import { OngoingDots } from "./OngoingDots";
+import { useScrollToSelected } from "../hooks/useScrollToSelected";
+import { TokensIcon, ForwardIcon } from "./Icons";
+import { VscTerminal } from "react-icons/vsc";
+import { AiOutlineRobot } from "react-icons/ai";
 
 interface SessionPickerProps {
   sessions: CodexSessionInfo[];
@@ -12,10 +18,22 @@ interface SessionPickerProps {
   onSearchChange: (q: string) => void;
 }
 
-function sessionTitle(s: CodexSessionInfo): string {
+function sessionPreview(s: CodexSessionInfo): string {
   if (s.thread_name) return s.thread_name;
   if (s.cwd) return shortPath(s.cwd);
   return s.id.slice(0, 12);
+}
+
+function groupByDate(
+  sessions: CodexSessionInfo[],
+): Array<{ category: string; items: CodexSessionInfo[] }> {
+  const map = new Map<string, CodexSessionInfo[]>();
+  for (const s of sessions) {
+    const key = s.date_group || "unknown";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(s);
+  }
+  return Array.from(map.entries()).map(([category, items]) => ({ category, items }));
 }
 
 export function SessionPicker({
@@ -28,18 +46,30 @@ export function SessionPicker({
 }: SessionPickerProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const selectedRef = useScrollToSelected(selectedIndex);
 
-  useEffect(() => {
-    const item = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex]);
+  const totalTokens = useMemo(
+    () => sessions.reduce((acc, s) => acc + (s.total_tokens ?? 0), 0),
+    [sessions],
+  );
+
+  const dateGroups = groupByDate(sessions);
+  let flatIndex = 0;
 
   return (
-    <div className="session-picker">
-      <div className="session-picker__search-row">
+    <div className="picker">
+      <div className="picker__header">
+        <div className="picker__title">
+          Sessions
+          {totalTokens > 0 && (
+            <span className="picker__total-tokens">
+              <TokensIcon /> {formatTokens(totalTokens)} tok
+            </span>
+          )}
+        </div>
         <input
           ref={searchRef}
-          className="session-picker__search"
+          className="picker__search"
           type="text"
           placeholder="Search sessions…"
           value={searchQuery}
@@ -47,54 +77,92 @@ export function SessionPicker({
           spellCheck={false}
         />
       </div>
-      {loading && <div className="session-picker__loading">Loading…</div>}
-      <div ref={listRef} className="session-picker__list">
-        {sessions.map((s, i) => (
-          <div
-            key={s.path}
-            className={`session-picker__item${i === selectedIndex ? " session-picker__item--selected" : ""}`}
-            onClick={() => onSelectSession(s)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSelectSession(s);
-            }}
-          >
-            <div className="session-picker__item-header">
-              <span className="session-picker__title">{sessionTitle(s)}</span>
-              {s.is_ongoing && <OngoingDots count={3} />}
-              {s.git_branch && <span className="session-picker__branch">{s.git_branch}</span>}
-            </div>
-            <div className="session-picker__item-meta">
-              {s.model && <span className="session-picker__model">{s.model}</span>}
-              {s.cwd && (
-                <span className="session-picker__cwd" title={s.cwd}>
-                  {truncate(s.cwd, 60)}
-                </span>
-              )}
-              <span className="session-picker__time">{timeAgo(s.start_time)}</span>
-              {s.turn_count > 0 && (
-                <span className="session-picker__turns">{s.turn_count} turns</span>
-              )}
-              {(s.total_tokens ?? 0) > 0 && (
-                <span className="session-picker__tokens">{formatTokens(s.total_tokens!)} tok</span>
-              )}
-              {s.spawned_worker_ids.length > 0 && (
-                <span className="session-picker__badge session-picker__badge--collab">
-                  +{s.spawned_worker_ids.length} workers
-                </span>
-              )}
-              {s.is_external_worker && (
-                <span className="session-picker__badge session-picker__badge--worker">
-                  [worker]
-                </span>
-              )}
-            </div>
+
+      <div ref={listRef} className="picker__list">
+        {loading && <div className="picker__loading">Loading…</div>}
+
+        {!loading && sessions.length === 0 && (
+          <div className="picker__empty">
+            {searchQuery ? "No matching sessions" : "No sessions found"}
+          </div>
+        )}
+
+        {dateGroups.map((group) => (
+          <div key={group.category}>
+            <div className="picker__group-header">{group.category}</div>
+            {group.items.map((s) => {
+              const idx = flatIndex++;
+              const isSelected = idx === selectedIndex;
+              const model = shortModel(s.model ?? "");
+              const modelClr = s.model ? getModelColor(s.model) : undefined;
+
+              return (
+                <div
+                  key={s.path}
+                  ref={isSelected ? selectedRef : undefined}
+                  className={`picker__session${isSelected ? " picker__session--selected" : ""}${s.is_ongoing ? " picker__session--ongoing" : ""}`}
+                  onClick={() => onSelectSession(s)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onSelectSession(s);
+                  }}
+                >
+                  <div className="picker__session-top">
+                    <span className="picker__session-icon">
+                      {s.is_external_worker ? <AiOutlineRobot /> : <VscTerminal />}
+                    </span>
+                    <span className="picker__session-preview">
+                      {truncate(sessionPreview(s), 80)}
+                    </span>
+                    {s.is_ongoing && (
+                      <span className="picker__session-ongoing">
+                        <OngoingDots count={1} />
+                        ACTIVE
+                      </span>
+                    )}
+                    <button
+                      className="message__detail-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectSession(s);
+                      }}
+                    >
+                      Detail <ForwardIcon />
+                    </button>
+                  </div>
+                  <div className="picker__session-meta">
+                    {model && (
+                      <span className="picker__session-model" style={{ color: modelClr }}>
+                        {model}
+                      </span>
+                    )}
+                    {s.git_branch && <span className="picker__session-branch">{s.git_branch}</span>}
+                    {s.turn_count > 0 && (
+                      <span className="picker__session-stat">{s.turn_count} turns</span>
+                    )}
+                    {(s.total_tokens ?? 0) > 0 && (
+                      <span className="picker__session-stat">
+                        {formatTokens(s.total_tokens!)} tok
+                      </span>
+                    )}
+                    {s.spawned_worker_ids.length > 0 && (
+                      <span className="picker__session-badge picker__session-badge--collab">
+                        +{s.spawned_worker_ids.length} workers
+                      </span>
+                    )}
+                    {s.is_external_worker && (
+                      <span className="picker__session-badge picker__session-badge--worker">
+                        worker
+                      </span>
+                    )}
+                    <span className="picker__session-time">{timeAgo(s.start_time)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ))}
-        {!loading && sessions.length === 0 && (
-          <div className="session-picker__empty">No sessions found.</div>
-        )}
       </div>
     </div>
   );

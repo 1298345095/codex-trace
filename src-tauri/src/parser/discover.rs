@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use std::time::SystemTime;
 
 use super::entry::RawEntry;
 
@@ -258,6 +259,22 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
     // Sessions with no turns have no active task — not ongoing regardless of event stream.
     if turn_count == 0 {
         is_ongoing = false;
+    }
+
+    // Validate with file mtime: sessions last modified more than 5 minutes ago
+    // cannot be actively processing a turn, regardless of missing task_complete events.
+    // Many older CLI versions didn't emit task_complete, causing false positives otherwise.
+    if is_ongoing {
+        const ONGOING_THRESHOLD_SECS: u64 = 300;
+        if let Ok(metadata) = fs::metadata(path) {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                    if elapsed.as_secs() > ONGOING_THRESHOLD_SECS {
+                        is_ongoing = false;
+                    }
+                }
+            }
+        }
     }
 
     let date_group = date_group_from_path(path);

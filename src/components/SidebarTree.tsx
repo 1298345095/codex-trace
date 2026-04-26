@@ -77,7 +77,7 @@ export function SidebarTree({
                 return (
                   <div
                     key={s.path}
-                    className={`sidebar-tree__session${isSelected ? " sidebar-tree__session--selected" : ""}`}
+                    className={`sidebar-tree__session${isSelected ? " sidebar-tree__session--selected" : ""}${s.is_ongoing ? " sidebar-tree__session--ongoing" : ""}`}
                     onClick={() => onSelectSession(s)}
                     role="button"
                     tabIndex={0}
@@ -99,8 +99,8 @@ export function SidebarTree({
                       {s.is_external_worker && (
                         <span className="sidebar-tree__badge sidebar-tree__badge--worker">w</span>
                       )}
+                      <span className="sidebar-tree__time">{timeAgo(s.start_time)}</span>
                     </div>
-                    <span className="sidebar-tree__time">{timeAgo(s.start_time)}</span>
                   </div>
                 );
               })}

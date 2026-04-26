@@ -2,6 +2,18 @@ import { useCallback } from "react";
 import type { CodexToolCall } from "../../shared/types";
 import { formatDuration } from "../../shared/format";
 import { formatJson } from "../lib/format";
+import {
+  ExecIcon,
+  McpIcon,
+  PatchIcon,
+  WebIcon,
+  ImageIcon,
+  SpawnIcon,
+  WaitIcon,
+  CloseAgentIcon,
+  UnknownToolIcon,
+  WarningIcon,
+} from "./Icons";
 
 interface ToolCallItemProps {
   tool: CodexToolCall;
@@ -9,26 +21,27 @@ interface ToolCallItemProps {
   onToggle: () => void;
 }
 
-function kindLabel(kind: CodexToolCall["kind"]): string {
+function kindIcon(kind: CodexToolCall["kind"], failed: boolean) {
+  if (failed) return <WarningIcon />;
   switch (kind) {
     case "exec_command":
-      return "exec";
+      return <ExecIcon />;
     case "mcp_tool":
-      return "mcp";
+      return <McpIcon />;
     case "patch_apply":
-      return "patch";
+      return <PatchIcon />;
     case "web_search":
-      return "web";
+      return <WebIcon />;
     case "image_generation":
-      return "image";
+      return <ImageIcon />;
     case "spawn_agent":
-      return "spawn";
+      return <SpawnIcon />;
     case "wait_agent":
-      return "wait";
+      return <WaitIcon />;
     case "close_agent":
-      return "close";
+      return <CloseAgentIcon />;
     default:
-      return "tool";
+      return <UnknownToolIcon />;
   }
 }
 
@@ -72,7 +85,8 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
           if (e.key === "Enter" || e.key === " ") handleToggle();
         }}
       >
-        <span className="tool-call__kind">{kindLabel(tool.kind)}</span>
+        <span className="tool-call__chevron">{expanded ? "▼" : "▶"}</span>
+        <span className="tool-call__icon">{kindIcon(tool.kind, failed)}</span>
         <span className="tool-call__name">{tool.name}</span>
         {tool.exit_code !== null && (
           <span
@@ -84,56 +98,91 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
         {tool.duration_secs !== null && (
           <span className="tool-call__duration">{formatDuration(tool.duration_secs * 1000)}</span>
         )}
-        <span className="tool-call__chevron">{expanded ? "▼" : "▶"}</span>
       </div>
 
       {expanded && (
         <div className="tool-call__body">
+          {/* Input section */}
           {tool.kind === "exec_command" && tool.command && (
-            <pre className="tool-call__cmd">{tool.command.join(" ")}</pre>
+            <div className="tool-call__section tool-call__section--input">
+              <div className="tool-call__section-title">Command</div>
+              <pre className="tool-call__cmd">{tool.command.join(" ")}</pre>
+              {tool.cwd && <div className="tool-call__cwd">cwd: {tool.cwd}</div>}
+            </div>
           )}
-          {tool.kind === "exec_command" && tool.cwd && (
-            <div className="tool-call__cwd">cwd: {tool.cwd}</div>
-          )}
+
           {tool.kind === "mcp_tool" && (
-            <div className="tool-call__mcp-info">
-              {tool.mcp_server && <span>server: {tool.mcp_server}</span>}
-              {tool.mcp_tool && <span> tool: {tool.mcp_tool}</span>}
+            <div className="tool-call__section tool-call__section--input">
+              <div className="tool-call__section-title">Input</div>
+              <div className="tool-call__mcp-info">
+                {tool.mcp_server && (
+                  <span className="tool-call__mcp-server">{tool.mcp_server}</span>
+                )}
+                {tool.mcp_tool && <span className="tool-call__mcp-tool"> / {tool.mcp_tool}</span>}
+              </div>
               {tool.arguments && Object.keys(tool.arguments).length > 0 && (
-                <pre className="tool-call__args">{formatJson(JSON.stringify(tool.arguments))}</pre>
+                <pre className="tool-call__json">
+                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+                </pre>
               )}
             </div>
           )}
+
           {tool.kind === "patch_apply" && tool.patch_changes && (
-            <div className="tool-call__patch">
-              {Object.entries(tool.patch_changes).map(([file, change]) => (
-                <div key={file} className="tool-call__patch-file">
-                  <span className={`tool-call__patch-type tool-call__patch-type--${change.type}`}>
-                    {change.type}
-                  </span>{" "}
-                  {file}
-                  {change.unified_diff && (
-                    <pre className="tool-call__diff">{change.unified_diff}</pre>
-                  )}
-                </div>
-              ))}
+            <div className="tool-call__section tool-call__section--input">
+              <div className="tool-call__section-title">Changes</div>
+              <div className="tool-call__patch">
+                {Object.entries(tool.patch_changes).map(([file, change]) => (
+                  <div key={file} className="tool-call__patch-file">
+                    <span className={`tool-call__patch-type tool-call__patch-type--${change.type}`}>
+                      {change.type}
+                    </span>{" "}
+                    {file}
+                    {change.unified_diff && (
+                      <pre className="tool-call__diff">{change.unified_diff}</pre>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
           {tool.kind === "web_search" && (
-            <div className="tool-call__web">
-              {tool.web_query && <div>query: {tool.web_query}</div>}
-              {tool.web_url && <div>url: {tool.web_url}</div>}
+            <div className="tool-call__section tool-call__section--input">
+              <div className="tool-call__section-title">Query</div>
+              <div className="tool-call__web">
+                {tool.web_query && <div>{tool.web_query}</div>}
+                {tool.web_url && <div className="tool-call__web-url">{tool.web_url}</div>}
+              </div>
             </div>
           )}
+
           {tool.kind === "image_generation" && tool.image_prompt && (
-            <div className="tool-call__image-prompt">{tool.image_prompt}</div>
-          )}
-          {tool.kind === "spawn_agent" && (
-            <div className="tool-call__collab-info" style={{ color: "var(--collab-badge)" }}>
-              spawned agent
+            <div className="tool-call__section tool-call__section--input">
+              <div className="tool-call__section-title">Prompt</div>
+              <div className="tool-call__image-prompt">{tool.image_prompt}</div>
             </div>
           )}
-          {tool.output !== null && <pre className="tool-call__output">{tool.output}</pre>}
+
+          {(tool.kind === "spawn_agent" ||
+            tool.kind === "wait_agent" ||
+            tool.kind === "close_agent") &&
+            Object.keys(tool.arguments ?? {}).length > 0 && (
+              <div className="tool-call__section tool-call__section--input">
+                <div className="tool-call__section-title">Arguments</div>
+                <pre className="tool-call__json">
+                  <code>{formatJson(JSON.stringify(tool.arguments))}</code>
+                </pre>
+              </div>
+            )}
+
+          {/* Output / Result section */}
+          {tool.output !== null && (
+            <div className="tool-call__section tool-call__section--output">
+              <div className="tool-call__section-title">Output</div>
+              <pre className="tool-call__output">{tool.output}</pre>
+            </div>
+          )}
         </div>
       )}
     </div>
