@@ -51,7 +51,7 @@ export function formatExactTime(ts: string): string {
     const hh = String(d.getHours()).padStart(2, "0");
     const mi = String(d.getMinutes()).padStart(2, "0");
     const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}`;
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
   } catch {
     return "";
   }

@@ -2955,6 +2955,7 @@ body {
 .tool-call__duration {
   font-size: 0.7rem;
   color: var(--text-dim);
+  margin-left: auto;
 }
 .tool-call__chevron {
   font-size: 0.65rem;
@@ -3012,8 +3013,10 @@ body {
   line-height: 1;
   display: inline-flex;
   align-items: center;
-  margin-left: auto;
   flex-shrink: 0;
+}
+.tool-call__popout-btn--push {
+  margin-left: auto;
 }
 .tool-call__popout-btn:hover {
   color: var(--accent);

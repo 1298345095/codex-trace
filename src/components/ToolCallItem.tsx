@@ -102,7 +102,7 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
           <span className="tool-call__duration">{formatDuration(tool.duration_secs * 1000)}</span>
         )}
         <button
-          className="tool-call__popout-btn"
+          className={`tool-call__popout-btn${tool.duration_secs === null ? " tool-call__popout-btn--push" : ""}`}
           onClick={(e) => {
             e.stopPropagation();
             setPopout(true);

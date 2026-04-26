@@ -17,7 +17,8 @@ export function formatCost(usd: number): string {
 
 /** Formats duration: 1500 -> "1.5s", 90000 -> "1m 30s" */
 export function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
+  if (ms < 1) return "< 1ms";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
   const s = ms / 1000;
   if (s < 60) return `${s.toFixed(1)}s`;
   const m = Math.floor(s / 60);

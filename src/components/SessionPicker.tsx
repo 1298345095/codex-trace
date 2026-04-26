@@ -1,7 +1,7 @@
 import { useRef, useMemo } from "react";
 import type { CodexSessionInfo } from "../../shared/types";
-import { formatTokens, shortPath, timeAgo, truncate } from "../../shared/format";
-import { shortModel } from "../lib/format";
+import { formatTokens, shortPath, truncate } from "../../shared/format";
+import { shortModel, formatExactTime } from "../lib/format";
 import { getModelColor } from "../lib/theme";
 import { OngoingDots } from "./OngoingDots";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
@@ -150,7 +150,7 @@ export function SessionPicker({
                         +{s.spawned_worker_ids.length} workers
                       </span>
                     )}
-                    <span className="picker__session-time">{timeAgo(s.start_time)}</span>
+                    <span className="picker__session-time">{formatExactTime(s.start_time)}</span>
                   </div>
                 </div>
               );
