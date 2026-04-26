@@ -22,7 +22,6 @@ pub struct CodexSessionInfo {
     pub end_time: Option<String>,
     pub total_tokens: Option<u64>,
     pub is_ongoing: bool,
-    pub is_external_worker: bool,
     pub spawned_worker_ids: Vec<String>,
     /// "YYYY/MM/DD" derived from the file path
     pub date_group: String,
@@ -261,11 +260,11 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         is_ongoing = false;
     }
 
-    // Validate with file mtime: sessions last modified more than 5 minutes ago
+    // Validate with file mtime: sessions last modified more than 60 seconds ago
     // cannot be actively processing a turn, regardless of missing task_complete events.
     // Many older CLI versions didn't emit task_complete, causing false positives otherwise.
     if is_ongoing {
-        const ONGOING_THRESHOLD_SECS: u64 = 300;
+        const ONGOING_THRESHOLD_SECS: u64 = 60;
         if let Ok(metadata) = fs::metadata(path) {
             if let Ok(modified) = metadata.modified() {
                 if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
@@ -278,7 +277,6 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
     }
 
     let date_group = date_group_from_path(path);
-    let is_external_worker = originator.as_deref() == Some("codex_exec");
 
     Some(CodexSessionInfo {
         id,
@@ -294,7 +292,6 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         end_time,
         total_tokens,
         is_ongoing,
-        is_external_worker,
         spawned_worker_ids,
         date_group,
     })

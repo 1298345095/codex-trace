@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use std::time::SystemTime;
 
 use super::entry::RawEntry;
 use super::turn::{build_turns, CodexTurn, TokenInfo};
@@ -87,11 +88,24 @@ pub fn parse_session(path: &Path) -> Result<CodexSession, String> {
     // Determine total tokens from last turn's token info
     let total_tokens = turns.iter().rev().find_map(|t| t.total_tokens.clone());
 
-    // Determine is_ongoing
-    let is_ongoing = turns
+    // Determine is_ongoing: last turn must be Ongoing AND file must have been
+    // modified within 60 seconds (same threshold as source repo). Sessions older
+    // than that have no live CLI writing to them — task_complete was simply missed
+    // (crash, kill, older CLI that never emitted the event).
+    let turn_ongoing = turns
         .last()
         .map(|t| t.status == super::turn::TurnStatus::Ongoing)
         .unwrap_or(false);
+    let file_fresh = fs::metadata(path)
+        .and_then(|m| m.modified())
+        .map(|mt| {
+            SystemTime::now()
+                .duration_since(mt)
+                .map(|e| e.as_secs() <= 60)
+                .unwrap_or(true)
+        })
+        .unwrap_or(true);
+    let is_ongoing = turn_ongoing && file_fresh;
 
     session.turns = turns;
     session.thread_name = thread_name;

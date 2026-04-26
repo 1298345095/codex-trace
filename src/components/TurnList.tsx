@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import type { CodexTurn } from "../../shared/types";
 import { formatDuration, formatTokens } from "../../shared/format";
+import { formatExactTime } from "../lib/format";
 import { useAutoScroll } from "../hooks/useAutoScroll";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
 import { OngoingDots } from "./OngoingDots";
@@ -76,6 +77,14 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
           null;
         const hasDetail = turn.agent_messages.length > 0 || turn.tool_calls.length > 0;
         const reasoningCount = turn.agent_messages.filter((m) => m.is_reasoning).length;
+        const userTs = turn.started_at
+          ? formatExactTime(new Date(turn.started_at * 1000).toISOString())
+          : null;
+        const agentTs = turn.completed_at
+          ? formatExactTime(new Date(turn.completed_at * 1000).toISOString())
+          : turn.agent_messages.at(-1)?.timestamp
+            ? formatExactTime(turn.agent_messages.at(-1)!.timestamp)
+            : null;
 
         return (
           <div
@@ -98,6 +107,7 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
                   <UserIcon />
                 </span>
                 <span className="message__role message__role--user">User</span>
+                {userTs && <span className="message__timestamp">{userTs}</span>}
               </div>
               {userMsg && (
                 <div
@@ -135,6 +145,7 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
                     Detail <ForwardIcon />
                   </button>
                 )}
+                {agentTs && <span className="message__timestamp">{agentTs}</span>}
               </div>
 
               {agentPreview && (

@@ -7,7 +7,6 @@ import { OngoingDots } from "./OngoingDots";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
 import { TokensIcon, ForwardIcon } from "./Icons";
 import { VscTerminal } from "react-icons/vsc";
-import { AiOutlineRobot } from "react-icons/ai";
 
 interface SessionPickerProps {
   sessions: CodexSessionInfo[];
@@ -110,7 +109,7 @@ export function SessionPicker({
                 >
                   <div className="picker__session-top">
                     <span className="picker__session-icon">
-                      {s.is_external_worker ? <AiOutlineRobot /> : <VscTerminal />}
+                      <VscTerminal />
                     </span>
                     <span className="picker__session-preview">
                       {truncate(sessionPreview(s), 80)}
@@ -149,11 +148,6 @@ export function SessionPicker({
                     {s.spawned_worker_ids.length > 0 && (
                       <span className="picker__session-badge picker__session-badge--collab">
                         +{s.spawned_worker_ids.length} workers
-                      </span>
-                    )}
-                    {s.is_external_worker && (
-                      <span className="picker__session-badge picker__session-badge--worker">
-                        worker
                       </span>
                     )}
                     <span className="picker__session-time">{timeAgo(s.start_time)}</span>

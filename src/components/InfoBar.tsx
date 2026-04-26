@@ -2,7 +2,6 @@ import type { CodexSession } from "../../shared/types";
 import { formatTokens, shortPath, timeAgo } from "../../shared/format";
 import { shortModel } from "../lib/format";
 import { getModelColor } from "../lib/theme";
-import { OngoingDots } from "./OngoingDots";
 
 interface InfoBarProps {
   session: CodexSession;
@@ -21,7 +20,7 @@ export function InfoBar({ session }: InfoBarProps) {
     <div className="info-bar">
       {cwd && <span className="info-bar__project">{cwd}</span>}
       {sessionId && <span className="info-bar__session-id">{sessionId}</span>}
-      {session.originator && <span className="info-bar__originator">{session.originator}</span>}
+      {session.originator && <span className="info-bar__originator">via {session.originator}</span>}
       {branch && <span className="info-bar__branch">{branch}</span>}
       {model && (
         <span className="info-bar__model" style={{ color: modelClr }}>
@@ -32,7 +31,7 @@ export function InfoBar({ session }: InfoBarProps) {
       <span className="info-bar__time">{timeAgo(session.timestamp)}</span>
       {session.is_ongoing && (
         <span className="info-bar__ongoing">
-          <OngoingDots count={3} /> active
+          <span className="braille-spinner" /> active
         </span>
       )}
     </div>

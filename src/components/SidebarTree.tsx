@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import type { CodexSessionInfo } from "../../shared/types";
 import { shortPath, timeAgo } from "../../shared/format";
-import { OngoingDots } from "./OngoingDots";
 
 interface SidebarTreeProps {
   sessions: CodexSessionInfo[];
@@ -85,20 +84,8 @@ export function SidebarTree({
                       if (e.key === "Enter") onSelectSession(s);
                     }}
                   >
-                    <span className="sidebar-tree__session-label">{sessionLabel(s)}</span>
-                    <div className="sidebar-tree__session-meta">
-                      {s.is_ongoing && <OngoingDots count={1} />}
-                      {s.turn_count > 0 && (
-                        <span className="sidebar-tree__turns">{s.turn_count}t</span>
-                      )}
-                      {s.spawned_worker_ids.length > 0 && (
-                        <span className="sidebar-tree__badge sidebar-tree__badge--collab">
-                          +{s.spawned_worker_ids.length}
-                        </span>
-                      )}
-                      {s.is_external_worker && (
-                        <span className="sidebar-tree__badge sidebar-tree__badge--worker">w</span>
-                      )}
+                    <div className="sidebar-tree__session-row">
+                      <span className="sidebar-tree__session-label">{sessionLabel(s)}</span>
                       <span className="sidebar-tree__time">{timeAgo(s.start_time)}</span>
                     </div>
                   </div>

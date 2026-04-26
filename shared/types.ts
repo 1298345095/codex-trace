@@ -113,7 +113,6 @@ export interface CodexSessionInfo {
   end_time: string | null;
   total_tokens: number | null;
   is_ongoing: boolean;
-  is_external_worker: boolean;
   spawned_worker_ids: string[];
   date_group: string;
 }

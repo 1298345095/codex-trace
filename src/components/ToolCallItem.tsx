@@ -148,9 +148,9 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
         <div className="tool-call__section tool-call__section--input">
           <div className="tool-call__section-title">Command</div>
           {tool.command ? (
-            <pre className="tool-call__cmd">{tool.command.join(" ")}</pre>
+            <pre className="tool-call__block tool-call__cmd">{tool.command.join(" ")}</pre>
           ) : (
-            <pre className="tool-call__json">
+            <pre className="tool-call__block tool-call__json">
               <code>{formatJson(JSON.stringify(tool.arguments))}</code>
             </pre>
           )}
@@ -161,12 +161,12 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
       {tool.kind === "mcp_tool" && (
         <div className="tool-call__section tool-call__section--input">
           <div className="tool-call__section-title">Input</div>
-          <div className="tool-call__mcp-info">
+          <div className="tool-call__block tool-call__mcp-info">
             {tool.mcp_server && <span className="tool-call__mcp-server">{tool.mcp_server}</span>}
             {tool.mcp_tool && <span className="tool-call__mcp-tool"> / {tool.mcp_tool}</span>}
           </div>
           {tool.arguments && Object.keys(tool.arguments).length > 0 && (
-            <pre className="tool-call__json">
+            <pre className="tool-call__block tool-call__json">
               <code>{formatJson(JSON.stringify(tool.arguments))}</code>
             </pre>
           )}
@@ -176,7 +176,7 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
       {tool.kind === "patch_apply" && tool.patch_changes && (
         <div className="tool-call__section tool-call__section--input">
           <div className="tool-call__section-title">Changes</div>
-          <div className="tool-call__patch">
+          <div className="tool-call__block tool-call__patch">
             {Object.entries(tool.patch_changes).map(([file, change]) => (
               <div key={file} className="tool-call__patch-file">
                 <span className={`tool-call__patch-type tool-call__patch-type--${change.type}`}>
@@ -184,7 +184,7 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
                 </span>{" "}
                 {file}
                 {change.unified_diff && (
-                  <pre className="tool-call__diff">{change.unified_diff}</pre>
+                  <pre className="tool-call__block tool-call__diff">{change.unified_diff}</pre>
                 )}
               </div>
             ))}
@@ -195,14 +195,14 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
       {tool.kind === "patch_apply" && !tool.patch_changes && tool.input_text && (
         <div className="tool-call__section tool-call__section--input">
           <div className="tool-call__section-title">Patch</div>
-          <pre className="tool-call__diff">{tool.input_text}</pre>
+          <pre className="tool-call__block tool-call__diff">{tool.input_text}</pre>
         </div>
       )}
 
       {tool.kind === "web_search" && (
         <div className="tool-call__section tool-call__section--input">
           <div className="tool-call__section-title">Query</div>
-          <div className="tool-call__web">
+          <div className="tool-call__block tool-call__web">
             {tool.web_query && <div>{tool.web_query}</div>}
             {tool.web_url && <div className="tool-call__web-url">{tool.web_url}</div>}
           </div>
@@ -212,7 +212,7 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
       {tool.kind === "image_generation" && tool.image_prompt && (
         <div className="tool-call__section tool-call__section--input">
           <div className="tool-call__section-title">Prompt</div>
-          <div className="tool-call__image-prompt">{tool.image_prompt}</div>
+          <div className="tool-call__block tool-call__image-prompt">{tool.image_prompt}</div>
         </div>
       )}
 
@@ -220,7 +220,7 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
         Object.keys(tool.arguments ?? {}).length > 0 && (
           <div className="tool-call__section tool-call__section--input">
             <div className="tool-call__section-title">Arguments</div>
-            <pre className="tool-call__json">
+            <pre className="tool-call__block tool-call__json">
               <code>{formatJson(JSON.stringify(tool.arguments))}</code>
             </pre>
           </div>
@@ -231,7 +231,7 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
         Object.keys(tool.arguments).length > 0 && (
           <div className="tool-call__section tool-call__section--input">
             <div className="tool-call__section-title">Input</div>
-            <pre className="tool-call__json">
+            <pre className="tool-call__block tool-call__json">
               <code>{formatJson(JSON.stringify(tool.arguments))}</code>
             </pre>
           </div>
@@ -240,7 +240,11 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
       {tool.output !== null && (
         <div className="tool-call__section tool-call__section--output">
           <div className="tool-call__section-title">Output</div>
-          <pre className="tool-call__output">{tool.output}</pre>
+          <pre
+            className={`tool-call__output${tool.exit_code !== null && tool.exit_code !== 0 ? " tool-call__output--error" : ""}`}
+          >
+            {tool.output}
+          </pre>
         </div>
       )}
     </div>

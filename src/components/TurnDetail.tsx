@@ -6,7 +6,7 @@ import type { CodexTurn } from "../../shared/types";
 import { ToolCallItem } from "./ToolCallItem";
 import { OngoingDots } from "./OngoingDots";
 import { BackIcon, CodexIcon } from "./Icons";
-import { shortModel } from "../lib/format";
+import { shortModel, formatExactTime } from "../lib/format";
 import { getModelColor } from "../lib/theme";
 import { formatTokens, formatDuration } from "../../shared/format";
 
@@ -101,8 +101,17 @@ export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: T
             <div className="turn-detail__section turn-detail__section--commentary">
               <div className="turn-detail__section-label">Commentary</div>
               {commentary.map((msg, i) => (
-                <div key={msg.timestamp ?? i} className="turn-detail__markdown">
-                  <MarkdownRenderer content={msg.text} />
+                <div key={msg.timestamp ?? i} className="turn-detail__msg">
+                  {msg.timestamp && (
+                    <div className="turn-detail__msg-header">
+                      <span className="turn-detail__msg-time">
+                        {formatExactTime(msg.timestamp)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="turn-detail__markdown">
+                    <MarkdownRenderer content={msg.text} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -111,8 +120,17 @@ export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: T
           {finalAnswer && (
             <div className="turn-detail__section turn-detail__section--final">
               <div className="turn-detail__section-label">Final answer</div>
-              <div className="turn-detail__markdown">
-                <MarkdownRenderer content={finalAnswer.text} />
+              <div className="turn-detail__msg">
+                {finalAnswer.timestamp && (
+                  <div className="turn-detail__msg-header">
+                    <span className="turn-detail__msg-time">
+                      {formatExactTime(finalAnswer.timestamp)}
+                    </span>
+                  </div>
+                )}
+                <div className="turn-detail__markdown">
+                  <MarkdownRenderer content={finalAnswer.text} />
+                </div>
               </div>
             </div>
           )}
