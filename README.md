@@ -1,6 +1,9 @@
 # Codex Trace
 
-> If you use Claude Code, see [claude-code-trace](https://github.com/delexw/claude-code-trace)
+Browse, search, and live-tail [Codex CLI](https://github.com/openai/codex) session logs in a native desktop app and web UI.
+Renders turns, tool calls, token counts, and collaboration chains from `~/.codex/sessions/` JSONL files — with live SSE tailing for ongoing sessions.
+
+> Claude Code user? See [claude-code-trace](https://github.com/delexw/claude-code-trace) instead.
 
 [![CI](https://github.com/PixelPaw-Labs/codex-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/PixelPaw-Labs/codex-trace/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -9,9 +12,7 @@
 [![Tauri](https://img.shields.io/badge/tauri-v2-24C8D8?logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/PixelPaw-Labs/codex-trace/releases)
 
-A desktop + web viewer for [Codex CLI](https://github.com/openai/codex) session JSONL files. Built with [Tauri v2](https://v2.tauri.app/) (Rust backend + React frontend).
-
-Reads session logs from `~/.codex/sessions/` and renders them as a scrollable turn list with expandable tool calls, token counts, and live tailing. Works as a **native desktop app** (macOS, Linux, Windows) or as a **web app** in any browser.
+![codex-trace screenshot](example.png)
 
 ## Features
 
@@ -86,3 +87,7 @@ npm run tauri dev    # Full Tauri app
 # Verify
 npm run check        # tsc + oxlint + oxfmt + cargo clippy/fmt/test
 ```
+
+## Contributing
+
+PRs welcome. Run `npm run check` before submitting — it covers tsc, lint, format, and Rust tests in one command.
