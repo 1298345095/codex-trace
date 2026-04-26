@@ -568,6 +568,12 @@ body {
   min-width: 0;
 }
 
+.info-bar__originator {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
 .info-bar__branch {
   color: var(--git-branch);
   font-size: 12px;

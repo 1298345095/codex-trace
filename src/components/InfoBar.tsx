@@ -21,6 +21,7 @@ export function InfoBar({ session }: InfoBarProps) {
     <div className="info-bar">
       {cwd && <span className="info-bar__project">{cwd}</span>}
       {sessionId && <span className="info-bar__session-id">{sessionId}</span>}
+      {session.originator && <span className="info-bar__originator">{session.originator}</span>}
       {branch && <span className="info-bar__branch">{branch}</span>}
       {model && (
         <span className="info-bar__model" style={{ color: modelClr }}>
