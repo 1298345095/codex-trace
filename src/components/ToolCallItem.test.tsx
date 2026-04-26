@@ -111,7 +111,7 @@ describe("ToolCallItem", () => {
   });
 
   it("renders MCP server in header prefix and expanded body", () => {
-    render(
+    const { container } = render(
       <ToolCallItem
         tool={makeTool({
           kind: "mcp_tool",
@@ -123,9 +123,9 @@ describe("ToolCallItem", () => {
         onToggle={vi.fn()}
       />,
     );
-    const matches = screen.getAllByText("codex_apps");
-    expect(matches.length).toBeGreaterThanOrEqual(1);
-    expect(matches.some((el) => el.classList.contains("tool-call__mcp-prefix"))).toBe(true);
+    const prefix = container.querySelector(".tool-call__mcp-prefix");
+    expect(prefix).toBeInTheDocument();
+    expect(prefix!.textContent).toBe("MCP codex_apps");
   });
 
   it("renders web query when kind is web_search", () => {
@@ -164,5 +164,43 @@ describe("ToolCallItem", () => {
       />,
     );
     expect(screen.getByText("src/main.rs")).toBeInTheDocument();
+  });
+
+  it("pretty-prints JSON output when output is a JSON object", () => {
+    const { container } = render(
+      <ToolCallItem
+        tool={makeTool({ output: '{"url":"https://example.com","number":42}' })}
+        expanded={true}
+        onToggle={vi.fn()}
+      />,
+    );
+    const code = container.querySelector(".tool-call__output code");
+    expect(code).toBeInTheDocument();
+    expect(code!.textContent).toContain('"url"');
+    expect(code!.textContent).toContain('"https://example.com"');
+    expect(code!.textContent).toContain('"number"');
+  });
+
+  it("renders plain text output when output is not JSON", () => {
+    const { container } = render(
+      <ToolCallItem
+        tool={makeTool({ output: "plain text output" })}
+        expanded={true}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".tool-call__output code")).not.toBeInTheDocument();
+    expect(screen.getByText("plain text output")).toBeInTheDocument();
+  });
+
+  it("renders plain text output when output is a JSON primitive", () => {
+    const { container } = render(
+      <ToolCallItem
+        tool={makeTool({ output: '"just a string"' })}
+        expanded={true}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".tool-call__output code")).not.toBeInTheDocument();
   });
 });

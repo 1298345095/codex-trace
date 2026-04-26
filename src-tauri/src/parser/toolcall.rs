@@ -131,12 +131,20 @@ impl ToolCallBuilder {
         }
     }
 
-    /// Register a function_call_output (no end event → Unknown kind).
+    /// Register a function_call_output (no typed end event).
+    /// If the pending call has an MCP namespace, classify as McpTool; otherwise Unknown.
     pub fn add_function_call_output(&mut self, call_id: &str, output: &str) {
         if let Some(pending) = self.pending.remove(call_id) {
+            let (kind, mcp_server, mcp_tool) = match &pending.namespace {
+                Some(ns) if ns.starts_with("mcp__") => {
+                    let (server, tool) = parse_mcp_namespace(ns, &pending.name);
+                    (ToolKind::McpTool, server, tool)
+                }
+                _ => (ToolKind::Unknown, None, None),
+            };
             self.finalized.push(ToolCall {
                 call_id: call_id.to_string(),
-                kind: ToolKind::Unknown,
+                kind,
                 name: pending.name,
                 arguments: pending.arguments,
                 input_text: pending.input_text,
@@ -145,8 +153,8 @@ impl ToolCallBuilder {
                 command: None,
                 cwd: None,
                 duration_secs: None,
-                mcp_server: None,
-                mcp_tool: None,
+                mcp_server,
+                mcp_tool,
                 patch_success: None,
                 patch_changes: None,
                 web_query: None,
@@ -242,9 +250,7 @@ impl ToolCallBuilder {
                 .map(|s| s.to_string());
             (server, tool)
         } else if let Some(ns) = &pending.namespace {
-            // namespace = "mcp__<server>" — strip leading "mcp__" to get server name
-            let server = ns.strip_prefix("mcp__").unwrap_or(ns).to_string();
-            (Some(server), Some(pending.name.clone()))
+            parse_mcp_namespace(ns, &pending.name)
         } else {
             parse_mcp_name(&pending.name)
         };
@@ -516,6 +522,36 @@ impl ToolCallBuilder {
     }
 }
 
+/// Reconstruct MCP server + tool from the `namespace` field and function `name`.
+///
+/// OpenAI encodes MCP tools as: namespace = `mcp__<server>__[ns_suffix]`, name = `[_suffix]`.
+/// `server` = full namespace without `mcp__` prefix (e.g. `codex_apps__github`).
+/// `tool`   = reconstructed full tool name (ns_suffix concatenated with name).
+///
+/// Examples:
+///   namespace="mcp__codex_apps__github", name="_get_pr_info"
+///     → server="codex_apps__github", tool="github_get_pr_info"
+///   namespace="mcp__computer_use__", name="screenshot"
+///     → server="computer_use", tool="screenshot"
+fn parse_mcp_namespace(namespace: &str, name: &str) -> (Option<String>, Option<String>) {
+    let after_mcp = match namespace.strip_prefix("mcp__") {
+        Some(s) => s,
+        None => return (None, None),
+    };
+    // Use the full namespace segment (minus mcp__ and any trailing __) as the server identifier.
+    let server = after_mcp.trim_end_matches("__");
+    if server.is_empty() {
+        return (None, None);
+    }
+    // Reconstruct full tool name: ns_suffix (after first __) concatenated with name.
+    let full_tool = if let Some((_, ns_suffix)) = after_mcp.split_once("__") {
+        format!("{ns_suffix}{name}")
+    } else {
+        name.to_string()
+    };
+    (Some(server.to_string()), Some(full_tool))
+}
+
 fn kind_name(event_type: &str) -> String {
     event_type
         .strip_suffix("_end")
@@ -563,5 +599,44 @@ fn extract_mcp_output(payload: &Value) -> Option<String> {
         None
     } else {
         Some(texts.join("\n"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_mcp_namespace;
+
+    #[test]
+    fn namespace_with_tool_prefix_keeps_full_namespace_as_server() {
+        // namespace="mcp__codex_apps__github", name="_get_pr_info"
+        // server = "codex_apps__github" (full namespace without mcp__)
+        // tool   = "github_get_pr_info" (ns_suffix + name)
+        let (server, tool) = parse_mcp_namespace("mcp__codex_apps__github", "_get_pr_info");
+        assert_eq!(server.as_deref(), Some("codex_apps__github"));
+        assert_eq!(tool.as_deref(), Some("github_get_pr_info"));
+    }
+
+    #[test]
+    fn namespace_with_trailing_double_underscore() {
+        // namespace="mcp__computer_use__", name="screenshot"
+        // trailing __ is trimmed → server="computer_use", tool="screenshot"
+        let (server, tool) = parse_mcp_namespace("mcp__computer_use__", "screenshot");
+        assert_eq!(server.as_deref(), Some("computer_use"));
+        assert_eq!(tool.as_deref(), Some("screenshot"));
+    }
+
+    #[test]
+    fn namespace_without_trailing_separator() {
+        // namespace="mcp__my_server", name="do_thing"
+        let (server, tool) = parse_mcp_namespace("mcp__my_server", "do_thing");
+        assert_eq!(server.as_deref(), Some("my_server"));
+        assert_eq!(tool.as_deref(), Some("do_thing"));
+    }
+
+    #[test]
+    fn non_mcp_namespace_returns_none() {
+        let (server, tool) = parse_mcp_namespace("other__ns__tool", "fn_name");
+        assert_eq!(server, None);
+        assert_eq!(tool, None);
     }
 }

@@ -68,6 +68,17 @@ function kindClass(kind: CodexToolCall["kind"]): string {
   }
 }
 
+function looksLikeJson(s: string): boolean {
+  const t = s.trimStart();
+  if (t[0] !== "{" && t[0] !== "[") return false;
+  try {
+    JSON.parse(s);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
   const handleToggle = useCallback(() => onToggle(), [onToggle]);
   const [popout, setPopout] = useState(false);
@@ -93,7 +104,7 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
         <span className="tool-call__name">
           {tool.kind === "mcp_tool" && tool.mcp_server ? (
             <>
-              <span className="tool-call__mcp-prefix">{tool.mcp_server}</span>
+              <span className="tool-call__mcp-prefix">MCP {tool.mcp_server}</span>
               {" / "}
               {tool.mcp_tool ?? tool.name}
             </>
@@ -253,7 +264,7 @@ function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: 
           <pre
             className={`tool-call__output${tool.exit_code !== null && tool.exit_code !== 0 ? " tool-call__output--error" : ""}`}
           >
-            {tool.output}
+            {looksLikeJson(tool.output) ? <code>{formatJson(tool.output)}</code> : tool.output}
           </pre>
         </div>
       )}
