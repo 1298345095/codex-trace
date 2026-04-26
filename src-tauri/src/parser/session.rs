@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use super::entry::RawEntry;
-use super::turn::{build_turns, CodexTurn, TokenInfo};
+use super::turn::{build_turns, CodexTurn, TokenInfo, TurnStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitInfo {
@@ -74,7 +74,7 @@ pub fn parse_session(path: &Path) -> Result<CodexSession, String> {
     }
 
     // Build turns from remaining entries
-    let turns = build_turns(&entries);
+    let mut turns = build_turns(&entries);
 
     // Extract thread_name from last thread_name_updated
     let thread_name = turns.iter().rev().find_map(|t| t.thread_name.clone());
@@ -106,6 +106,14 @@ pub fn parse_session(path: &Path) -> Result<CodexSession, String> {
         })
         .unwrap_or(true);
     let is_ongoing = turn_ongoing && file_fresh;
+
+    // If the file is stale and the last turn never got a completion event,
+    // mark it as Aborted so the UI doesn't show an ongoing indicator.
+    if turn_ongoing && !file_fresh {
+        if let Some(last) = turns.last_mut() {
+            last.status = TurnStatus::Aborted;
+        }
+    }
 
     session.turns = turns;
     session.thread_name = thread_name;

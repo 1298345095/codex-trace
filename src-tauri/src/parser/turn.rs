@@ -513,7 +513,12 @@ fn handle_response_item(
                 .get("arguments")
                 .and_then(|v| v.as_str())
                 .unwrap_or("{}");
-            builder.add_function_call(call_id, name, arguments_str);
+            let namespace = payload
+                .get("namespace")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+            builder.add_function_call(call_id, name, arguments_str, namespace);
         }
 
         "function_call_output" => {

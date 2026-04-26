@@ -44,6 +44,8 @@ pub struct PendingCall {
     pub name: String,
     pub arguments: Value,
     pub input_text: Option<String>,
+    /// Raw namespace from the function_call payload (e.g. "mcp__codex_apps__github").
+    pub namespace: Option<String>,
 }
 
 /// Builder that collects function_call / custom_tool_call entries and finalizes
@@ -62,7 +64,13 @@ impl ToolCallBuilder {
     }
 
     /// Register a function_call (response_item).
-    pub fn add_function_call(&mut self, call_id: String, name: String, arguments_str: &str) {
+    pub fn add_function_call(
+        &mut self,
+        call_id: String,
+        name: String,
+        arguments_str: &str,
+        namespace: Option<String>,
+    ) {
         let arguments = serde_json::from_str(arguments_str).unwrap_or(Value::Null);
         self.pending.insert(
             call_id,
@@ -70,6 +78,7 @@ impl ToolCallBuilder {
                 name,
                 arguments,
                 input_text: None,
+                namespace,
             },
         );
     }
@@ -82,6 +91,7 @@ impl ToolCallBuilder {
                 name,
                 arguments: Value::Object(serde_json::Map::new()),
                 input_text: input,
+                namespace: None,
             },
         );
     }
@@ -157,6 +167,7 @@ impl ToolCallBuilder {
                 name: kind_name(event_type),
                 arguments: Value::Null,
                 input_text: None,
+                namespace: None,
             });
 
         let command: Option<Vec<String>> = payload
@@ -215,9 +226,11 @@ impl ToolCallBuilder {
                 name: kind_name(event_type),
                 arguments: Value::Null,
                 input_text: None,
+                namespace: None,
             });
 
-        // Extract server + tool from name (mcp__server__tool) or invocation field
+        // Extract server + tool from invocation field, then namespace, then name.
+        // namespace format: "mcp__<server>" (no trailing __, no tool name).
         let (mcp_server, mcp_tool) = if let Some(inv) = payload.get("invocation") {
             let server = inv
                 .get("server")
@@ -228,6 +241,10 @@ impl ToolCallBuilder {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
             (server, tool)
+        } else if let Some(ns) = &pending.namespace {
+            // namespace = "mcp__<server>" — strip leading "mcp__" to get server name
+            let server = ns.strip_prefix("mcp__").unwrap_or(ns).to_string();
+            (Some(server), Some(pending.name.clone()))
         } else {
             parse_mcp_name(&pending.name)
         };
@@ -268,6 +285,7 @@ impl ToolCallBuilder {
                 name: kind_name(event_type),
                 arguments: Value::Null,
                 input_text: None,
+                namespace: None,
             });
 
         let patch_success = payload.get("success").and_then(|v| v.as_bool());
@@ -426,6 +444,7 @@ impl ToolCallBuilder {
                 name: kind_name(event_type),
                 arguments: Value::Null,
                 input_text: None,
+                namespace: None,
             });
         let output = ["output", "aggregated_output", "stdout"]
             .iter()
