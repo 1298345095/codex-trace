@@ -2986,6 +2986,7 @@ body {
   max-height: 300px;
   overflow-y: auto;
   margin: 6px 0 0;
+  color: var(--text-secondary);
 }
 .tool-call__diff {
   font-size: 0.75rem;
