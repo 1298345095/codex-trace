@@ -90,7 +90,17 @@ export function ToolCallItem({ tool, expanded, onToggle }: ToolCallItemProps) {
       >
         <span className="tool-call__chevron">{expanded ? "▼" : "▶"}</span>
         <span className="tool-call__icon">{kindIcon(tool.kind, failed)}</span>
-        <span className="tool-call__name">{tool.name}</span>
+        <span className="tool-call__name">
+          {tool.kind === "mcp_tool" && tool.mcp_server ? (
+            <>
+              <span className="tool-call__mcp-prefix">{tool.mcp_server}</span>
+              {" / "}
+              {tool.mcp_tool ?? tool.name}
+            </>
+          ) : (
+            tool.name
+          )}
+        </span>
         {tool.exit_code !== null && (
           <span
             className={`tool-call__exit${tool.exit_code !== 0 ? " tool-call__exit--fail" : ""}`}

@@ -2946,6 +2946,10 @@ body {
   color: var(--text-bright);
   flex: 1;
 }
+.tool-call__mcp-prefix {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
 .tool-call__exit {
   font-size: 0.75rem;
 }
