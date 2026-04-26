@@ -53,7 +53,8 @@ export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: T
   const modelColor = turn.model ? getModelColor(turn.model) : undefined;
 
   const metaParts: string[] = [];
-  if (turn.total_tokens?.total_tokens) metaParts.push(`${formatTokens(turn.total_tokens.total_tokens)} tok`);
+  if (turn.total_tokens?.total_tokens)
+    metaParts.push(`${formatTokens(turn.total_tokens.total_tokens)} tok`);
   if (turn.duration_ms) metaParts.push(formatDuration(turn.duration_ms));
 
   return (
@@ -62,7 +63,9 @@ export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: T
         <button className="message-detail__back" onClick={onBack}>
           <BackIcon /> Back
         </button>
-        <span className="message-detail__role-icon"><CodexIcon /></span>
+        <span className="message-detail__role-icon">
+          <CodexIcon />
+        </span>
         <span className="message-detail__title">Codex</span>
         {model && <span style={{ color: modelColor, fontWeight: 600, fontSize: 12 }}>{model}</span>}
         {turn.status === "ongoing" && <OngoingDots count={3} />}
@@ -72,89 +75,98 @@ export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: T
       </div>
 
       <div className="turn-detail__body">
-      <div className="turn-detail__content">
-      {turn.error && (
-        <div className="turn-detail__section turn-detail__section--error">
-          <div className="turn-detail__section-label">Error</div>
-          <pre className="turn-detail__error">{turn.error}</pre>
-        </div>
-      )}
-
-      {reasoning.length > 0 && (
-        <div className="turn-detail__section turn-detail__section--reasoning">
-          <div className="turn-detail__section-label" style={{ color: "var(--reasoning-text)" }}>
-            Reasoning (encrypted)
-          </div>
-          <div className="turn-detail__reasoning-note">(reasoning encrypted — cannot display)</div>
-        </div>
-      )}
-
-      {commentary.length > 0 && (
-        <div className="turn-detail__section turn-detail__section--commentary">
-          <div className="turn-detail__section-label">Commentary</div>
-          {commentary.map((msg, i) => (
-            <div key={msg.timestamp ?? i} className="turn-detail__markdown">
-              <MarkdownRenderer content={msg.text} />
+        <div className="turn-detail__content">
+          {turn.error && (
+            <div className="turn-detail__section turn-detail__section--error">
+              <div className="turn-detail__section-label">Error</div>
+              <pre className="turn-detail__error">{turn.error}</pre>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {finalAnswer && (
-        <div className="turn-detail__section turn-detail__section--final">
-          <div className="turn-detail__section-label">Final answer</div>
-          <div className="turn-detail__markdown">
-            <MarkdownRenderer content={finalAnswer.text} />
-          </div>
-        </div>
-      )}
-
-      {turn.tool_calls.length > 0 && (
-        <div className="turn-detail__section turn-detail__section--tools">
-          <div className="turn-detail__section-label">Tool calls ({turn.tool_calls.length})</div>
-          {turn.tool_calls.map((tool, i) => (
-            <ToolCallItem
-              key={tool.call_id || i}
-              tool={tool}
-              expanded={expanded.has(i)}
-              onToggle={() => onToggle(i)}
-            />
-          ))}
-        </div>
-      )}
-
-      {turn.collab_spawns.length > 0 && (
-        <div className="turn-detail__section turn-detail__section--collab">
-          <div className="turn-detail__section-label" style={{ color: "var(--collab-badge)" }}>
-            Spawned workers ({turn.collab_spawns.length})
-          </div>
-          {turn.collab_spawns.map((spawn) => (
-            <div key={spawn.call_id} className="turn-detail__collab-spawn">
-              <div className="turn-detail__collab-header">
-                <span className="turn-detail__collab-nick">{spawn.agent_nickname}</span>
-                {spawn.model && <span className="turn-detail__collab-model">{spawn.model}</span>}
-                {onLoadWorker && (
-                  <button
-                    className="turn-detail__collab-btn"
-                    onClick={() => onLoadWorker(spawn.new_thread_id)}
-                    title="Open worker session"
-                  >
-                    Open ↗
-                  </button>
-                )}
+          {reasoning.length > 0 && (
+            <div className="turn-detail__section turn-detail__section--reasoning">
+              <div
+                className="turn-detail__section-label"
+                style={{ color: "var(--reasoning-text)" }}
+              >
+                Reasoning (encrypted)
               </div>
-              {spawn.prompt_preview && (
-                <pre className="turn-detail__collab-prompt">{spawn.prompt_preview}</pre>
-              )}
+              <div className="turn-detail__reasoning-note">
+                (reasoning encrypted — cannot display)
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {turn.has_compaction && (
-        <div className="turn-detail__compaction-note">Context was compacted in this turn.</div>
-      )}
-      </div>
+          {commentary.length > 0 && (
+            <div className="turn-detail__section turn-detail__section--commentary">
+              <div className="turn-detail__section-label">Commentary</div>
+              {commentary.map((msg, i) => (
+                <div key={msg.timestamp ?? i} className="turn-detail__markdown">
+                  <MarkdownRenderer content={msg.text} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {finalAnswer && (
+            <div className="turn-detail__section turn-detail__section--final">
+              <div className="turn-detail__section-label">Final answer</div>
+              <div className="turn-detail__markdown">
+                <MarkdownRenderer content={finalAnswer.text} />
+              </div>
+            </div>
+          )}
+
+          {turn.tool_calls.length > 0 && (
+            <div className="turn-detail__section turn-detail__section--tools">
+              <div className="turn-detail__section-label">
+                Tool calls ({turn.tool_calls.length})
+              </div>
+              {turn.tool_calls.map((tool, i) => (
+                <ToolCallItem
+                  key={tool.call_id || i}
+                  tool={tool}
+                  expanded={expanded.has(i)}
+                  onToggle={() => onToggle(i)}
+                />
+              ))}
+            </div>
+          )}
+
+          {turn.collab_spawns.length > 0 && (
+            <div className="turn-detail__section turn-detail__section--collab">
+              <div className="turn-detail__section-label" style={{ color: "var(--collab-badge)" }}>
+                Spawned workers ({turn.collab_spawns.length})
+              </div>
+              {turn.collab_spawns.map((spawn) => (
+                <div key={spawn.call_id} className="turn-detail__collab-spawn">
+                  <div className="turn-detail__collab-header">
+                    <span className="turn-detail__collab-nick">{spawn.agent_nickname}</span>
+                    {spawn.model && (
+                      <span className="turn-detail__collab-model">{spawn.model}</span>
+                    )}
+                    {onLoadWorker && (
+                      <button
+                        className="turn-detail__collab-btn"
+                        onClick={() => onLoadWorker(spawn.new_thread_id)}
+                        title="Open worker session"
+                      >
+                        Open ↗
+                      </button>
+                    )}
+                  </div>
+                  {spawn.prompt_preview && (
+                    <pre className="turn-detail__collab-prompt">{spawn.prompt_preview}</pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {turn.has_compaction && (
+            <div className="turn-detail__compaction-note">Context was compacted in this turn.</div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,15 @@ import { formatDuration, formatTokens } from "../../shared/format";
 import { useAutoScroll } from "../hooks/useAutoScroll";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
 import { OngoingDots } from "./OngoingDots";
-import { UserIcon, CodexIcon, ForwardIcon, TokensIcon, ToolsIcon, DurationIcon, ThinkingIcon } from "./Icons";
+import {
+  UserIcon,
+  CodexIcon,
+  ForwardIcon,
+  TokensIcon,
+  ToolsIcon,
+  DurationIcon,
+  ThinkingIcon,
+} from "./Icons";
 
 interface TurnListProps {
   turns: CodexTurn[];
@@ -22,7 +30,8 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
   const toggleUser = useCallback((i: number) => {
     setExpandedUsers((prev) => {
       const next = new Set(prev);
-      if (next.has(i)) next.delete(i); else next.add(i);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
       return next;
     });
   }, []);
@@ -30,23 +39,30 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
   const toggleCodex = useCallback((i: number) => {
     setExpandedCodex((prev) => {
       const next = new Set(prev);
-      if (next.has(i)) next.delete(i); else next.add(i);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
       return next;
     });
   }, []);
 
-  const handleCodexClick = useCallback((i: number) => {
-    if (clickTimers.current.has(i)) {
-      clearTimeout(clickTimers.current.get(i)!);
-      clickTimers.current.delete(i);
-      onSelectTurn(i);
-    } else {
-      clickTimers.current.set(i, setTimeout(() => {
+  const handleCodexClick = useCallback(
+    (i: number) => {
+      if (clickTimers.current.has(i)) {
+        clearTimeout(clickTimers.current.get(i)!);
         clickTimers.current.delete(i);
-        toggleCodex(i);
-      }, 250));
-    }
-  }, [onSelectTurn, toggleCodex]);
+        onSelectTurn(i);
+      } else {
+        clickTimers.current.set(
+          i,
+          setTimeout(() => {
+            clickTimers.current.delete(i);
+            toggleCodex(i);
+          }, 250),
+        );
+      }
+    },
+    [onSelectTurn, toggleCodex],
+  );
 
   return (
     <div ref={listRef} className="message-list">
@@ -122,7 +138,9 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
               </div>
 
               {agentPreview && (
-                <div className={`message__content${!expandedCodex.has(i) ? " message__content--collapsed" : ""}`}>
+                <div
+                  className={`message__content${!expandedCodex.has(i) ? " message__content--collapsed" : ""}`}
+                >
                   {agentPreview}
                 </div>
               )}
@@ -130,9 +148,7 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
               {(turn.total_tokens || turn.tool_calls.length > 0 || turn.duration_ms !== null) && (
                 <div className="message__stats">
                   {turn.status !== "ongoing" && (
-                    <span
-                      className={`message__stat turn-list__status--${turn.status}`}
-                    >
+                    <span className={`message__stat turn-list__status--${turn.status}`}>
                       {turn.status === "complete" ? "✓" : turn.status === "aborted" ? "✗" : "!"}
                     </span>
                   )}
