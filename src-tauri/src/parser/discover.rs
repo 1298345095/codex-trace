@@ -271,11 +271,11 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
             "response_item" => {
                 let payload = v.get("payload").unwrap_or(&Value::Null);
                 match payload.get("type").and_then(|t| t.as_str()).unwrap_or("") {
-                    "function_call" => {
-                        if payload.get("name").and_then(|v| v.as_str()) == Some("spawn_agent") {
-                            if let Some(call_id) = payload.get("call_id").and_then(|v| v.as_str()) {
-                                pending_spawn_call_ids.insert(call_id.to_string());
-                            }
+                    "function_call"
+                        if payload.get("name").and_then(|v| v.as_str()) == Some("spawn_agent") =>
+                    {
+                        if let Some(call_id) = payload.get("call_id").and_then(|v| v.as_str()) {
+                            pending_spawn_call_ids.insert(call_id.to_string());
                         }
                     }
                     "function_call_output" => {
