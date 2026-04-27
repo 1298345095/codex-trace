@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { CodexToolCall } from "../../shared/types";
+import type { CodexSession, CodexToolCall } from "../../shared/types";
 import { ToolCallItem } from "./ToolCallItem";
 
 function makeTool(overrides: Partial<CodexToolCall> = {}): CodexToolCall {
@@ -22,8 +22,55 @@ function makeTool(overrides: Partial<CodexToolCall> = {}): CodexToolCall {
     web_query: null,
     web_url: null,
     image_prompt: null,
+    worker_session: null,
     status: "completed",
     ...overrides,
+  };
+}
+
+function makeWorkerSession(toolCalls: CodexToolCall[]): CodexSession {
+  return {
+    id: "worker-session",
+    timestamp: "2026-04-27T04:50:46Z",
+    cwd: "/tmp/worker",
+    originator: null,
+    cli_version: null,
+    model_provider: null,
+    git: null,
+    instructions: null,
+    turns: [
+      {
+        turn_id: "worker-turn",
+        started_at: null,
+        completed_at: null,
+        duration_ms: null,
+        status: "complete",
+        user_message: "Worker prompt",
+        agent_messages: [
+          {
+            text: "Nested final",
+            phase: "final_answer",
+            timestamp: "2026-04-27T04:51:00Z",
+            is_reasoning: false,
+          },
+        ],
+        tool_calls: toolCalls,
+        final_answer: "Nested final",
+        total_tokens: null,
+        model: null,
+        cwd: "/tmp/worker",
+        reasoning_effort: null,
+        error: null,
+        has_compaction: false,
+        thread_name: "Worker thread",
+        collab_spawns: [],
+      },
+    ],
+    is_ongoing: false,
+    total_tokens: null,
+    thread_name: "Worker thread",
+    spawned_worker_ids: [],
+    path: "/tmp/worker.jsonl",
   };
 }
 
@@ -204,7 +251,7 @@ describe("ToolCallItem", () => {
     expect(container.querySelector(".tool-call__output code")).not.toBeInTheDocument();
   });
 
-  it("shows Open button for spawn_agent when workerSessionId is provided", () => {
+  it("shows an Open button for spawn_agent tools with embedded worker sessions", () => {
     const onOpenWorker = vi.fn();
     render(
       <ToolCallItem
@@ -213,18 +260,25 @@ describe("ToolCallItem", () => {
           name: "spawn_agent",
           command: null,
           exit_code: null,
+          worker_session: makeWorkerSession([
+            makeTool({
+              call_id: "child-1",
+              name: "nested_shell",
+              command: ["pwd"],
+              output: "/tmp/worker",
+            }),
+          ]),
         })}
-        expanded={false}
+        expanded={true}
         onToggle={vi.fn()}
-        workerSessionId="session-abc"
-        isWorkerOpen={false}
         onOpenWorker={onOpenWorker}
       />,
     );
-    expect(screen.getByText("Open →")).toBeInTheDocument();
+    expect(screen.getByText("Open")).toBeInTheDocument();
+    expect(screen.queryByText("Worker prompt")).not.toBeInTheDocument();
   });
 
-  it("shows Close button for spawn_agent when worker panel is open", () => {
+  it("shows Close when the worker panel for the tool is open", () => {
     render(
       <ToolCallItem
         tool={makeTool({
@@ -232,39 +286,41 @@ describe("ToolCallItem", () => {
           name: "spawn_agent",
           command: null,
           exit_code: null,
+          worker_session: makeWorkerSession([
+            makeTool({
+              call_id: "child-1",
+              name: "first_nested_tool",
+              command: ["echo", "first"],
+              output: "first",
+            }),
+          ]),
         })}
         expanded={false}
         onToggle={vi.fn()}
-        workerSessionId="session-abc"
         isWorkerOpen={true}
         onOpenWorker={vi.fn()}
       />,
     );
-    expect(screen.getByText("← Close")).toBeInTheDocument();
+    expect(screen.getByText("Close")).toBeInTheDocument();
   });
 
-  it("calls onOpenWorker with session id when Open button clicked", () => {
+  it("calls onOpenWorker with the source tool when Open is clicked", () => {
     const onOpenWorker = vi.fn();
+    const tool = makeTool({
+      kind: "spawn_agent",
+      name: "spawn_agent",
+      command: null,
+      exit_code: null,
+      worker_session: makeWorkerSession([]),
+    });
     render(
-      <ToolCallItem
-        tool={makeTool({
-          kind: "spawn_agent",
-          name: "spawn_agent",
-          command: null,
-          exit_code: null,
-        })}
-        expanded={false}
-        onToggle={vi.fn()}
-        workerSessionId="session-abc"
-        isWorkerOpen={false}
-        onOpenWorker={onOpenWorker}
-      />,
+      <ToolCallItem tool={tool} expanded={false} onToggle={vi.fn()} onOpenWorker={onOpenWorker} />,
     );
-    fireEvent.click(screen.getByText("Open →"));
-    expect(onOpenWorker).toHaveBeenCalledWith("session-abc");
+    fireEvent.click(screen.getByText("Open"));
+    expect(onOpenWorker).toHaveBeenCalledWith(tool);
   });
 
-  it("does not show worker button when workerSessionId is absent", () => {
+  it("does not show worker panel button when embedded worker session is absent", () => {
     render(
       <ToolCallItem
         tool={makeTool({
@@ -275,8 +331,9 @@ describe("ToolCallItem", () => {
         })}
         expanded={false}
         onToggle={vi.fn()}
+        onOpenWorker={vi.fn()}
       />,
     );
-    expect(screen.queryByText("Open →")).not.toBeInTheDocument();
+    expect(screen.queryByText("Open")).not.toBeInTheDocument();
   });
 });

@@ -59,6 +59,7 @@ export interface CodexToolCall {
   web_query: string | null;
   web_url: string | null;
   image_prompt: string | null;
+  worker_session: CodexSession | null;
   status: string;
 }
 
@@ -117,6 +118,8 @@ export interface CodexSessionInfo {
   is_external_worker: boolean;
   /** true when this session's id appears in another session's spawned_worker_ids */
   is_inline_worker: boolean;
+  worker_nickname: string | null;
+  worker_role: string | null;
   spawned_worker_ids: string[];
   date_group: string;
 }

@@ -1,7 +1,8 @@
 import { useRef, useMemo } from "react";
 import type { CodexSessionInfo } from "../../shared/types";
-import { formatTokens, shortPath, truncate } from "../../shared/format";
+import { formatTokens, truncate } from "../../shared/format";
 import { shortModel, formatExactTime } from "../lib/format";
+import { sessionDisplayName } from "../lib/sessionDisplay";
 import { getModelColor } from "../lib/theme";
 import { OngoingDots } from "./OngoingDots";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
@@ -15,12 +16,6 @@ interface SessionPickerProps {
   selectedIndex: number;
   onSelectSession: (info: CodexSessionInfo) => void;
   onSearchChange: (q: string) => void;
-}
-
-function sessionPreview(s: CodexSessionInfo): string {
-  if (s.thread_name) return s.thread_name;
-  if (s.cwd) return shortPath(s.cwd);
-  return s.id.slice(0, 12);
 }
 
 function groupByDate(
@@ -112,7 +107,7 @@ export function SessionPicker({
                       <VscTerminal />
                     </span>
                     <span className="picker__session-preview">
-                      {truncate(sessionPreview(s), 80)}
+                      {truncate(sessionDisplayName(s), 80)}
                     </span>
                     {s.is_ongoing && (
                       <span className="picker__session-ongoing">

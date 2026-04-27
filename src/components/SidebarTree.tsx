@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { CodexSessionInfo } from "../../shared/types";
-import { shortPath, timeAgo } from "../../shared/format";
+import { timeAgo } from "../../shared/format";
+import { sessionDisplayName } from "../lib/sessionDisplay";
 import { OngoingDots } from "./OngoingDots";
 
 interface SidebarTreeProps {
@@ -36,12 +37,6 @@ function groupByDate(sessions: CodexSessionInfo[]): Map<string, CodexSessionInfo
     map.get(dg)!.push(s);
   }
   return map;
-}
-
-function sessionLabel(s: CodexSessionInfo): string {
-  if (s.thread_name) return s.thread_name;
-  if (s.cwd) return shortPath(s.cwd);
-  return s.id.slice(0, 8);
 }
 
 export function SidebarTree({
@@ -126,7 +121,7 @@ export function SidebarTree({
                       }}
                     >
                       <div className="sidebar-tree__session-row">
-                        <span className="sidebar-tree__session-label">{sessionLabel(s)}</span>
+                        <span className="sidebar-tree__session-label">{sessionDisplayName(s)}</span>
                         {s.is_ongoing && <OngoingDots count={1} />}
                         <span className="sidebar-tree__time">{timeAgo(s.start_time)}</span>
                       </div>
@@ -175,7 +170,9 @@ export function SidebarTree({
                               <span className="sidebar-tree__badge sidebar-tree__badge--worker">
                                 worker
                               </span>
-                              <span className="sidebar-tree__session-label">{sessionLabel(w)}</span>
+                              <span className="sidebar-tree__session-label">
+                                {sessionDisplayName(w)}
+                              </span>
                               {w.is_ongoing && <OngoingDots count={1} />}
                               <span className="sidebar-tree__time">{timeAgo(w.start_time)}</span>
                             </div>

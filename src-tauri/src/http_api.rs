@@ -101,6 +101,14 @@ fn ok_json<T: serde::Serialize>(val: &T) -> Response {
     Json(val).into_response()
 }
 
+fn session_load_error_status(msg: &str) -> axum::http::StatusCode {
+    if msg == crate::commands::session::NO_SESSION_PATH_PROVIDED {
+        axum::http::StatusCode::BAD_REQUEST
+    } else {
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -184,23 +192,11 @@ struct PathBody {
     path: String,
 }
 
-async fn api_load_session(
-    State(state): State<Arc<HttpState>>,
-    Json(body): Json<PathBody>,
-) -> Response {
-    if body.path.is_empty() {
-        return err_response(
-            axum::http::StatusCode::BAD_REQUEST,
-            "no session path provided".to_string(),
-        );
-    }
-    let app_state = app_state(&state);
-    let p = std::path::Path::new(&body.path);
-    let session = match crate::parser::session::parse_session(p) {
+async fn api_load_session(Json(body): Json<PathBody>) -> Response {
+    let session = match crate::commands::session::load_session_from_path(&body.path) {
         Ok(s) => s,
-        Err(e) => return err_response(axum::http::StatusCode::INTERNAL_SERVER_ERROR, e),
+        Err(e) => return err_response(session_load_error_status(&e), e),
     };
-    app_state.set_watched_ongoing(body.path, session.is_ongoing);
     ok_json(&session)
 }
 
@@ -213,9 +209,14 @@ async fn api_watch_session(
     Json(body): Json<PathBody>,
 ) -> Response {
     let app_state = app_state(&state);
+    let session = match crate::commands::session::load_session_from_path(&body.path) {
+        Ok(s) => s,
+        Err(e) => return err_response(session_load_error_status(&e), e),
+    };
     if let Err(e) = app_state.stop_session_watcher() {
         return err_response(axum::http::StatusCode::INTERNAL_SERVER_ERROR, e);
     }
+    app_state.set_watched_ongoing(body.path.clone(), session.is_ongoing);
     let handle = start_session_watcher(body.path, state.app.clone());
     if let Err(e) = app_state.set_session_watcher(handle) {
         return err_response(axum::http::StatusCode::INTERNAL_SERVER_ERROR, e);

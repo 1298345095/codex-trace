@@ -27,6 +27,8 @@ pub struct CodexSessionInfo {
     pub is_external_worker: bool,
     /// true when this session's id appears in another session's spawned_worker_ids (inline collab worker)
     pub is_inline_worker: bool,
+    pub worker_nickname: Option<String>,
+    pub worker_role: Option<String>,
     pub spawned_worker_ids: Vec<String>,
     /// "YYYY/MM/DD" derived from the file path
     pub date_group: String,
@@ -132,6 +134,8 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         git_branch,
         _instructions,
         is_external_worker,
+        worker_nickname,
+        worker_role,
     ) = match entry.entry_type.as_str() {
         "session_meta" => {
             let id = str_field(payload, "id");
@@ -150,6 +154,7 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 .get("source")
                 .and_then(|s| s.get("subagent"))
                 .is_some();
+            let (worker_nickname, worker_role) = worker_metadata(payload);
             (
                 id,
                 start_time,
@@ -159,6 +164,8 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 git_branch,
                 instructions,
                 is_external_worker,
+                worker_nickname,
+                worker_role,
             )
         }
         "session_meta_root" => {
@@ -169,7 +176,9 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 .and_then(|g| g.get("branch"))
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            (id, start_time, None, None, None, git_branch, None, false)
+            (
+                id, start_time, None, None, None, git_branch, None, false, None, None,
+            )
         }
         _ => return None,
     };
@@ -353,9 +362,25 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         is_ongoing,
         is_external_worker,
         is_inline_worker: false, // set by discover_sessions second pass
+        worker_nickname,
+        worker_role,
         spawned_worker_ids,
         date_group,
     })
+}
+
+fn worker_metadata(payload: &Value) -> (Option<String>, Option<String>) {
+    let thread_spawn = payload
+        .get("source")
+        .and_then(|source| source.get("subagent"))
+        .and_then(|subagent| subagent.get("thread_spawn"));
+
+    let nickname = thread_spawn
+        .and_then(|spawn| opt_str(spawn, "agent_nickname").or_else(|| opt_str(spawn, "nickname")));
+    let role = thread_spawn
+        .and_then(|spawn| opt_str(spawn, "agent_role").or_else(|| opt_str(spawn, "agent_type")));
+
+    (nickname, role)
 }
 
 fn str_field(v: &Value, key: &str) -> String {
@@ -438,6 +463,8 @@ mod tests {
         assert_eq!(parent.spawned_worker_ids, vec!["worker"]);
         assert!(child.is_external_worker);
         assert!(child.is_inline_worker);
+        assert_eq!(child.worker_nickname.as_deref(), Some("Parfit"));
+        assert_eq!(child.worker_role.as_deref(), Some("worker"));
     }
 
     #[test]
@@ -475,5 +502,7 @@ mod tests {
         assert_eq!(parent.spawned_worker_ids, vec!["worker"]);
         assert!(child.is_external_worker);
         assert!(child.is_inline_worker);
+        assert_eq!(child.worker_nickname.as_deref(), Some("Noether"));
+        assert_eq!(child.worker_role.as_deref(), Some("worker"));
     }
 }

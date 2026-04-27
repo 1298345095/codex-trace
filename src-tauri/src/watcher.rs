@@ -1,5 +1,5 @@
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
@@ -59,6 +59,15 @@ struct SessionUpdatePayload {
     session: crate::parser::session::CodexSession,
 }
 
+fn is_related_session_path(changed_path: &Path, session_file: &Path) -> bool {
+    if changed_path == session_file {
+        return true;
+    }
+
+    changed_path.extension().and_then(|ext| ext.to_str()) == Some("jsonl")
+        && changed_path.parent() == session_file.parent()
+}
+
 /// Start watching a session JSONL file for changes.
 pub fn start_session_watcher(path: String, app: AppHandle) -> WatcherHandle {
     let (stop_tx, mut stop_rx) = mpsc::channel::<()>(1);
@@ -81,14 +90,14 @@ pub fn start_session_watcher(path: String, app: AppHandle) -> WatcherHandle {
         let watch_dir = Path::new(&path).parent().unwrap_or(Path::new(""));
         let _ = watcher.watch(watch_dir, RecursiveMode::NonRecursive);
 
-        let session_file = path.clone();
+        let session_file = PathBuf::from(path.clone());
         run_debounce_loop(
             rx,
             move |event| {
                 event
                     .paths
                     .iter()
-                    .any(|p| p.to_string_lossy() == session_file)
+                    .any(|p| is_related_session_path(p, &session_file))
             },
             signal_tx,
             thread_stop_rx,
@@ -227,5 +236,32 @@ mod tests {
         };
         handle.stop();
         handle.stop();
+    }
+
+    #[test]
+    fn related_session_path_matches_parent_file() {
+        let session_file = Path::new("/tmp/sessions/rollout-parent.jsonl");
+        assert!(is_related_session_path(session_file, session_file));
+    }
+
+    #[test]
+    fn related_session_path_matches_sibling_jsonl_worker_file() {
+        let session_file = Path::new("/tmp/sessions/rollout-parent.jsonl");
+        let worker_file = Path::new("/tmp/sessions/rollout-worker.jsonl");
+        assert!(is_related_session_path(worker_file, session_file));
+    }
+
+    #[test]
+    fn related_session_path_ignores_non_jsonl_siblings() {
+        let session_file = Path::new("/tmp/sessions/rollout-parent.jsonl");
+        let temp_file = Path::new("/tmp/sessions/rollout-worker.tmp");
+        assert!(!is_related_session_path(temp_file, session_file));
+    }
+
+    #[test]
+    fn related_session_path_ignores_jsonl_in_other_directory() {
+        let session_file = Path::new("/tmp/sessions/rollout-parent.jsonl");
+        let other_file = Path::new("/tmp/other/rollout-worker.jsonl");
+        assert!(!is_related_session_path(other_file, session_file));
     }
 }

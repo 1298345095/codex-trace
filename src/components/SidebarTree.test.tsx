@@ -20,6 +20,8 @@ function makeSession(overrides: Partial<CodexSessionInfo> = {}): CodexSessionInf
     is_ongoing: false,
     is_external_worker: false,
     is_inline_worker: false,
+    worker_nickname: null,
+    worker_role: null,
     spawned_worker_ids: [],
     date_group: "2026/04/26",
     ...overrides,
@@ -201,8 +203,9 @@ describe("SidebarTree", () => {
     const worker = makeSession({
       id: "worker1",
       path: "/sessions/2026/04/26/rollout-worker.jsonl",
-      thread_name: "Worker Session",
+      thread_name: "Parent Session",
       is_inline_worker: true,
+      worker_nickname: "Parfit",
     });
     const parent = makeSession({
       id: "parent1",
@@ -220,10 +223,11 @@ describe("SidebarTree", () => {
       />,
     );
     fireEvent.click(screen.getByText(/1 workers/));
-    expect(screen.getByText("Worker Session")).toBeInTheDocument();
+    expect(screen.getByText("Parfit (worker1)")).toBeInTheDocument();
     expect(
-      screen.getByText("Worker Session").closest(".sidebar-tree__session--child"),
+      screen.getByText("Parfit (worker1)").closest(".sidebar-tree__session--child"),
     ).toBeTruthy();
+    expect(screen.queryAllByText("Parent Session")).toHaveLength(1);
   });
 
   it("shows worker badge on external worker sessions", () => {

@@ -1,3 +1,5 @@
+use super::spawn::parse_spawn_agent_output;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -35,6 +37,7 @@ pub struct ToolCall {
     pub web_query: Option<String>,
     pub web_url: Option<String>,
     pub image_prompt: Option<String>,
+    pub worker_session: Option<Box<super::session::CodexSession>>,
     pub status: String,
 }
 
@@ -126,6 +129,7 @@ impl ToolCallBuilder {
                 web_query: None,
                 web_url: None,
                 image_prompt: None,
+                worker_session: None,
                 status: if exit_code.unwrap_or(1) == 0 {
                     "completed".to_string()
                 } else {
@@ -196,12 +200,36 @@ impl ToolCallBuilder {
                 return;
             }
 
+            if pending.name == "spawn_agent" {
+                self.finalized.push(ToolCall {
+                    call_id: call_id.to_string(),
+                    kind: ToolKind::SpawnAgent,
+                    name: pending.name,
+                    arguments: pending.arguments,
+                    input_text: pending.input_text,
+                    output: Some(output.to_string()),
+                    exit_code: None,
+                    command: None,
+                    cwd: None,
+                    duration_secs: None,
+                    mcp_server: None,
+                    mcp_tool: None,
+                    patch_success: None,
+                    patch_changes: None,
+                    web_query: None,
+                    web_url: None,
+                    image_prompt: None,
+                    worker_session: None,
+                    status: spawn_agent_status(output),
+                });
+                return;
+            }
+
             let (kind, mcp_server, mcp_tool) = match &pending.namespace {
                 Some(ns) if ns.starts_with("mcp__") => {
                     let (server, tool) = parse_mcp_namespace(ns, &pending.name);
                     (ToolKind::McpTool, server, tool)
                 }
-                _ if pending.name == "spawn_agent" => (ToolKind::SpawnAgent, None, None),
                 _ if pending.name == "wait_agent" => (ToolKind::WaitAgent, None, None),
                 _ if pending.name == "close_agent" => (ToolKind::CloseAgent, None, None),
                 _ => (ToolKind::Unknown, None, None),
@@ -224,6 +252,7 @@ impl ToolCallBuilder {
                 web_query: None,
                 web_url: None,
                 image_prompt: None,
+                worker_session: None,
                 status: "completed".to_string(),
             });
         }
@@ -314,6 +343,7 @@ impl ToolCallBuilder {
             web_query: None,
             web_url: None,
             image_prompt: None,
+            worker_session: None,
             status,
         });
     }
@@ -371,6 +401,7 @@ impl ToolCallBuilder {
             web_query: None,
             web_url: None,
             image_prompt: None,
+            worker_session: None,
             status: "completed".to_string(),
         });
     }
@@ -413,6 +444,7 @@ impl ToolCallBuilder {
             web_query: None,
             web_url: None,
             image_prompt: None,
+            worker_session: None,
             status: str_field(payload, "status"),
         });
     }
@@ -440,6 +472,7 @@ impl ToolCallBuilder {
             web_query: None,
             web_url: None,
             image_prompt: None,
+            worker_session: None,
             status: str_field(payload, "status"),
         });
     }
@@ -467,6 +500,7 @@ impl ToolCallBuilder {
             web_query: None,
             web_url: None,
             image_prompt: None,
+            worker_session: None,
             status: "completed".to_string(),
         });
     }
@@ -494,6 +528,7 @@ impl ToolCallBuilder {
             web_query: None,
             web_url: None,
             image_prompt: None,
+            worker_session: None,
             status: "completed".to_string(),
         });
     }
@@ -530,6 +565,7 @@ impl ToolCallBuilder {
             web_query: query,
             web_url,
             image_prompt: None,
+            worker_session: None,
             status: "completed".to_string(),
         });
     }
@@ -573,6 +609,7 @@ impl ToolCallBuilder {
             web_query: None,
             web_url: None,
             image_prompt: None,
+            worker_session: None,
             status: str_field(payload, "status"),
         });
     }
@@ -599,6 +636,7 @@ impl ToolCallBuilder {
                 web_query: None,
                 web_url: None,
                 image_prompt: None,
+                worker_session: None,
                 status: "unknown".to_string(),
             });
         }
@@ -651,8 +689,20 @@ fn exec_tool_call_from_pending(
         web_query: None,
         web_url: None,
         image_prompt: None,
+        worker_session: None,
         status: parsed_output.status,
     }
+}
+
+fn spawn_agent_status(output: &str) -> String {
+    if parse_spawn_agent_output(output).is_some() {
+        "completed"
+    } else if output.trim().is_empty() {
+        "unknown"
+    } else {
+        "failed"
+    }
+    .to_string()
 }
 
 fn command_from_arguments(arguments: &Value) -> Option<Vec<String>> {

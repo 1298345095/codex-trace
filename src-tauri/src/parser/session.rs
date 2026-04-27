@@ -1,10 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use super::entry::RawEntry;
+use super::toolcall::ToolKind;
 use super::turn::{build_turns, CodexTurn, TokenInfo, TurnStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +37,23 @@ pub struct CodexSession {
 
 /// Parse a Codex JSONL session file into a CodexSession.
 pub fn parse_session(path: &Path) -> Result<CodexSession, String> {
+    let mut visited = HashSet::new();
+    parse_session_inner(path, &mut visited)
+}
+
+fn parse_session_inner(
+    path: &Path,
+    visited: &mut HashSet<PathBuf>,
+) -> Result<CodexSession, String> {
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let canonical_path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if !visited.insert(canonical_path.clone()) {
+        return Err(format!(
+            "recursive session reference detected: {}",
+            path.display()
+        ));
+    }
+
     let entries: Vec<RawEntry> = content
         .lines()
         .filter(|l| !l.trim().is_empty())
@@ -115,13 +134,100 @@ pub fn parse_session(path: &Path) -> Result<CodexSession, String> {
         }
     }
 
+    embed_worker_sessions(path, &mut turns, visited);
+
     session.turns = turns;
     session.thread_name = thread_name;
     session.spawned_worker_ids = spawned_worker_ids;
     session.total_tokens = total_tokens;
     session.is_ongoing = is_ongoing;
 
+    visited.remove(&canonical_path);
     Ok(session)
+}
+
+fn embed_worker_sessions(
+    parent_path: &Path,
+    turns: &mut [CodexTurn],
+    visited: &mut HashSet<PathBuf>,
+) {
+    for turn in turns {
+        for tool in &mut turn.tool_calls {
+            if tool.kind != ToolKind::SpawnAgent {
+                continue;
+            }
+
+            let Some(spawn) = turn
+                .collab_spawns
+                .iter()
+                .find(|spawn| spawn.call_id == tool.call_id)
+            else {
+                continue;
+            };
+
+            let Some(worker_path) = find_session_file_by_id(parent_path, &spawn.new_thread_id)
+            else {
+                continue;
+            };
+
+            let canonical_worker_path =
+                fs::canonicalize(&worker_path).unwrap_or_else(|_| worker_path.clone());
+            if visited.contains(&canonical_worker_path) {
+                continue;
+            }
+
+            if let Ok(worker_session) = parse_session_inner(&worker_path, visited) {
+                tool.worker_session = Some(Box::new(worker_session));
+            }
+        }
+    }
+}
+
+fn find_session_file_by_id(anchor_path: &Path, session_id: &str) -> Option<PathBuf> {
+    if session_id.is_empty() {
+        return None;
+    }
+
+    let dir = anchor_path.parent()?;
+    let mut candidates: Vec<PathBuf> = fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.extension().and_then(|ext| ext.to_str()) == Some("jsonl")
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.contains(session_id))
+        })
+        .collect();
+
+    candidates.sort();
+    candidates
+        .iter()
+        .find(|path| session_file_id(path).as_deref() == Some(session_id))
+        .cloned()
+        .or_else(|| candidates.into_iter().next())
+}
+
+fn session_file_id(path: &Path) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    BufReader::new(file).lines().take(20).find_map(|line| {
+        let line = line.ok()?;
+        let entry = RawEntry::parse(&line)?;
+        match entry.entry_type.as_str() {
+            "session_meta" => entry
+                .payload
+                .get("id")
+                .and_then(|id| id.as_str())
+                .map(|id| id.to_string()),
+            "session_meta_root" => entry
+                .raw
+                .get("id")
+                .and_then(|id| id.as_str())
+                .map(|id| id.to_string()),
+            _ => None,
+        }
+    })
 }
 
 fn parse_session_meta_new(session: &mut CodexSession, payload: &Value, _raw: &Value) {
@@ -239,6 +345,12 @@ mod tests {
     fn parse_session_collects_sdk_spawn_agent_output_workers() {
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("rollout-2026-04-27T16-50-45-parent.jsonl");
+        let worker_path = tmp
+            .path()
+            .join("rollout-2026-04-27T16-50-46-worker-session.jsonl");
+        let nested_worker_path = tmp
+            .path()
+            .join("rollout-2026-04-27T16-50-47-nested-worker-session.jsonl");
         std::fs::write(
             &path,
             [
@@ -251,6 +363,32 @@ mod tests {
             .join("\n"),
         )
         .unwrap();
+        std::fs::write(
+            &worker_path,
+            [
+                r#"{"timestamp":"2026-04-27T04:50:46Z","type":"session_meta","payload":{"id":"worker-session","timestamp":"2026-04-27T04:50:46Z","cwd":"/tmp/worker"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:05Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-worker"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:06Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"echo worker\"}","call_id":"call_exec"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:07Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_exec","output":"worker output"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:08Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Go deeper\"}","call_id":"call_nested"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:09Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_nested","output":"{\"agent_id\":\"nested-worker-session\",\"nickname\":\"Nested\"}"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:10Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-worker","completed_at":1777279930.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            &nested_worker_path,
+            [
+                r#"{"timestamp":"2026-04-27T04:50:47Z","type":"session_meta","payload":{"id":"nested-worker-session","timestamp":"2026-04-27T04:50:47Z","cwd":"/tmp/nested"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:11Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-nested"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:12Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"echo nested\"}","call_id":"call_nested_exec"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:13Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_nested_exec","output":"nested output"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:14Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-nested","completed_at":1777279934.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
 
         let session = parse_session(&path).unwrap();
 
@@ -258,6 +396,23 @@ mod tests {
         assert_eq!(
             session.turns[0].collab_spawns[0].new_thread_id,
             "worker-session"
+        );
+
+        let worker_session = session.turns[0].tool_calls[0]
+            .worker_session
+            .as_ref()
+            .expect("spawn_agent tool should embed worker session");
+        assert_eq!(worker_session.id, "worker-session");
+        assert_eq!(worker_session.turns[0].tool_calls[0].name, "exec_command");
+
+        let nested_worker_session = worker_session.turns[0].tool_calls[1]
+            .worker_session
+            .as_ref()
+            .expect("nested spawn_agent tool should embed nested worker session");
+        assert_eq!(nested_worker_session.id, "nested-worker-session");
+        assert_eq!(
+            nested_worker_session.turns[0].tool_calls[0].output,
+            Some("nested output".to_string())
         );
     }
 }

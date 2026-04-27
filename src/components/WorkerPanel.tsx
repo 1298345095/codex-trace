@@ -1,32 +1,72 @@
-import { useMemo, useState, useCallback } from "react";
-import type { CodexSession } from "../../shared/types";
-import { shortPath } from "../../shared/format";
-import { CloseIcon } from "./Icons";
-import { ToolCallItem } from "./ToolCallItem";
-import { MarkdownRenderer } from "./MarkdownRenderer";
+import { useCallback, useState } from "react";
+import type { CSSProperties } from "react";
+import type { CodexSession, CodexToolCall } from "../../shared/types";
+import { formatDuration, shortPath } from "../../shared/format";
 import { formatExactTime } from "../lib/format";
+import { CloseIcon, SpawnIcon } from "./Icons";
+import { MarkdownRenderer } from "./MarkdownRenderer";
+import { OngoingDots } from "./OngoingDots";
+import { ToolCallItem } from "./ToolCallItem";
 
 interface WorkerPanelProps {
   session: CodexSession;
-  nickname?: string;
-  loading?: boolean;
+  sourceTool: CodexToolCall;
+  activeWorkerCallId?: string | null;
+  style?: CSSProperties;
   onClose: () => void;
+  onOpenWorker?: (tool: CodexToolCall) => void;
 }
 
-function panelTitle(session: CodexSession, nickname?: string): string {
-  if (nickname) return nickname;
-  if (session.thread_name) return session.thread_name;
+function stringArg(tool: CodexToolCall, key: string): string | null {
+  const value = tool.arguments[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function spawnOutputString(tool: CodexToolCall, key: string): string | null {
+  if (!tool.output) return null;
+  try {
+    const parsed = JSON.parse(tool.output) as Record<string, unknown>;
+    const value = parsed[key];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function shortSessionId(session: CodexSession): string {
+  return session.id ? session.id.slice(0, 8) : "unknown";
+}
+
+export function workerPanelTitle(sourceTool: CodexToolCall, session: CodexSession): string {
+  const nickname = spawnOutputString(sourceTool, "nickname");
+  const role = stringArg(sourceTool, "agent_type") ?? "worker";
+  const shortId = shortSessionId(session);
+
+  if (nickname) return `${nickname} (${shortId})`;
+  return `${role} ${shortId}`;
+}
+
+function workerPanelDescription(sourceTool: CodexToolCall, session: CodexSession): string {
+  const prompt = stringArg(sourceTool, "message");
+  if (prompt) return prompt.split("\n")[0] ?? prompt;
   if (session.cwd) return shortPath(session.cwd);
-  return session.id.slice(0, 8);
+  return "";
 }
 
-export function WorkerPanel({ session, nickname, loading, onClose }: WorkerPanelProps) {
-  const title = useMemo(() => panelTitle(session, nickname), [session, nickname]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+export function WorkerPanel({
+  session,
+  sourceTool,
+  activeWorkerCallId,
+  style,
+  onClose,
+  onOpenWorker,
+}: WorkerPanelProps) {
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const title = workerPanelTitle(sourceTool, session);
+  const description = workerPanelDescription(sourceTool, session);
 
-  const toggleTool = useCallback((turnId: string, toolIdx: number) => {
-    const key = `${turnId}:${toolIdx}`;
-    setExpanded((prev) => {
+  const toggleTool = useCallback((key: string) => {
+    setExpandedTools((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -35,77 +75,99 @@ export function WorkerPanel({ session, nickname, loading, onClose }: WorkerPanel
   }, []);
 
   return (
-    <div className="worker-panel">
-      <div className="worker-panel__header">
-        <button className="worker-panel__close" onClick={onClose} title="Close panel">
+    <div className="agent-panel codex-worker-panel" style={style}>
+      <div className="agent-panel__header">
+        <button className="agent-panel__close" onClick={onClose} title="Close worker panel">
           <CloseIcon />
         </button>
-        <span className="worker-panel__badge">worker</span>
-        <span className="worker-panel__title">{title}</span>
+        <span className="agent-panel__icon">
+          <SpawnIcon />
+        </span>
+        <span className="agent-panel__type">{title}</span>
+        {description && <span className="agent-panel__desc">{description}</span>}
+        {session.is_ongoing && <OngoingDots count={3} />}
+        {sourceTool.duration_secs !== null && (
+          <span className="agent-panel__stats">
+            {formatDuration(sourceTool.duration_secs * 1000)}
+          </span>
+        )}
       </div>
 
-      <div className="worker-panel__body">
-        {loading && <div className="worker-panel__loading">Loading…</div>}
-
-        {!loading &&
-          session.turns.map((turn, ti) => {
+      <div className="agent-panel__content">
+        <div className="codex-worker-panel__list">
+          {session.turns.map((turn, turnIndex) => {
             const commentary = turn.agent_messages.filter(
-              (m) => m.phase !== "final_answer" && !m.is_reasoning,
+              (message) => message.phase !== "final_answer" && !message.is_reasoning,
             );
-            const finalAnswer = turn.agent_messages.find((m) => m.phase === "final_answer");
+            const finalAnswer = turn.agent_messages.find(
+              (message) => message.phase === "final_answer",
+            );
+            const turnKey = turn.turn_id || `${session.id}:${turnIndex}`;
 
             return (
-              <div key={turn.turn_id} className="worker-panel__turn">
+              <div key={turnKey} className="codex-worker-panel__turn">
                 {session.turns.length > 1 && (
-                  <div className="worker-panel__turn-label">Turn {ti + 1}</div>
+                  <div className="codex-worker-panel__turn-label">Turn {turnIndex + 1}</div>
                 )}
 
-                {commentary.map((msg, i) => (
-                  <div key={msg.timestamp ?? i} className="turn-detail__msg">
-                    {msg.timestamp && (
+                {turn.user_message && (
+                  <div className="codex-worker-panel__message">
+                    <div className="codex-worker-panel__label">User</div>
+                    <div className="turn-detail__markdown">
+                      <MarkdownRenderer content={turn.user_message} />
+                    </div>
+                  </div>
+                )}
+
+                {commentary.map((message, messageIndex) => (
+                  <div
+                    key={message.timestamp ?? `${turnKey}:commentary:${messageIndex}`}
+                    className="codex-worker-panel__message"
+                  >
+                    {message.timestamp && (
                       <div className="turn-detail__msg-header">
                         <span className="turn-detail__msg-time">
-                          {formatExactTime(msg.timestamp)}
+                          {formatExactTime(message.timestamp)}
                         </span>
                       </div>
                     )}
                     <div className="turn-detail__markdown">
-                      <MarkdownRenderer content={msg.text} />
+                      <MarkdownRenderer content={message.text} />
                     </div>
                   </div>
                 ))}
 
                 {finalAnswer && (
-                  <div className="turn-detail__section turn-detail__section--final">
-                    <div className="turn-detail__section-label">Final answer</div>
-                    <div className="turn-detail__msg">
-                      {finalAnswer.timestamp && (
-                        <div className="turn-detail__msg-header">
-                          <span className="turn-detail__msg-time">
-                            {formatExactTime(finalAnswer.timestamp)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="turn-detail__markdown">
-                        <MarkdownRenderer content={finalAnswer.text} />
+                  <div className="codex-worker-panel__message">
+                    <div className="codex-worker-panel__label">Final answer</div>
+                    {finalAnswer.timestamp && (
+                      <div className="turn-detail__msg-header">
+                        <span className="turn-detail__msg-time">
+                          {formatExactTime(finalAnswer.timestamp)}
+                        </span>
                       </div>
+                    )}
+                    <div className="turn-detail__markdown">
+                      <MarkdownRenderer content={finalAnswer.text} />
                     </div>
                   </div>
                 )}
 
                 {turn.tool_calls.length > 0 && (
-                  <div className="turn-detail__section turn-detail__section--tools">
-                    <div className="turn-detail__section-label">
+                  <div className="codex-worker-panel__tools">
+                    <div className="codex-worker-panel__label">
                       Tool calls ({turn.tool_calls.length})
                     </div>
-                    {turn.tool_calls.map((tool, i) => {
-                      const key = `${turn.turn_id}:${i}`;
+                    {turn.tool_calls.map((tool, toolIndex) => {
+                      const key = `${turnKey}:${tool.call_id || toolIndex}`;
                       return (
                         <ToolCallItem
-                          key={tool.call_id || i}
+                          key={key}
                           tool={tool}
-                          expanded={expanded.has(key)}
-                          onToggle={() => toggleTool(turn.turn_id, i)}
+                          expanded={expandedTools.has(key)}
+                          onToggle={() => toggleTool(key)}
+                          isWorkerOpen={tool.call_id === activeWorkerCallId}
+                          onOpenWorker={onOpenWorker}
                         />
                       );
                     })}
@@ -114,6 +176,7 @@ export function WorkerPanel({ session, nickname, loading, onClose }: WorkerPanel
               </div>
             );
           })}
+        </div>
       </div>
     </div>
   );

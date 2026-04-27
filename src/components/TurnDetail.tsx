@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import type { CodexTurn } from "../../shared/types";
+import type { CodexToolCall, CodexTurn } from "../../shared/types";
 import { ToolCallItem } from "./ToolCallItem";
 import { OngoingDots } from "./OngoingDots";
 import { BackIcon, CodexIcon } from "./Icons";
@@ -13,8 +12,8 @@ interface TurnDetailProps {
   expanded: Set<number>;
   onToggle: (i: number) => void;
   onBack: () => void;
-  onOpenWorkerPanel?: (sessionId: string, nickname?: string) => void;
-  openWorkerSessionId?: string | null;
+  openWorkerCallId?: string | null;
+  onOpenWorkerPanel?: (tool: CodexToolCall) => void;
 }
 
 export function TurnDetail({
@@ -22,17 +21,9 @@ export function TurnDetail({
   expanded,
   onToggle,
   onBack,
+  openWorkerCallId,
   onOpenWorkerPanel,
-  openWorkerSessionId,
 }: TurnDetailProps) {
-  // Map call_id → { new_thread_id, agent_nickname } for spawn_agent tool calls
-  const spawnMap = useMemo(() => {
-    const m = new Map<string, { sessionId: string; nickname: string }>();
-    for (const s of turn.collab_spawns) {
-      m.set(s.call_id, { sessionId: s.new_thread_id, nickname: s.agent_nickname });
-    }
-    return m;
-  }, [turn.collab_spawns]);
   const commentary = turn.agent_messages.filter(
     (m) => m.phase !== "final_answer" && !m.is_reasoning,
   );
@@ -129,24 +120,16 @@ export function TurnDetail({
               <div className="turn-detail__section-label">
                 Tool calls ({turn.tool_calls.length})
               </div>
-              {turn.tool_calls.map((tool, i) => {
-                const spawn = tool.kind === "spawn_agent" ? spawnMap.get(tool.call_id) : undefined;
-                return (
-                  <ToolCallItem
-                    key={tool.call_id || i}
-                    tool={tool}
-                    expanded={expanded.has(i)}
-                    onToggle={() => onToggle(i)}
-                    workerSessionId={spawn?.sessionId}
-                    isWorkerOpen={!!spawn && spawn.sessionId === openWorkerSessionId}
-                    onOpenWorker={
-                      onOpenWorkerPanel && spawn
-                        ? (id) => onOpenWorkerPanel(id, spawn.nickname)
-                        : undefined
-                    }
-                  />
-                );
-              })}
+              {turn.tool_calls.map((tool, i) => (
+                <ToolCallItem
+                  key={tool.call_id || i}
+                  tool={tool}
+                  expanded={expanded.has(i)}
+                  onToggle={() => onToggle(i)}
+                  isWorkerOpen={tool.call_id === openWorkerCallId}
+                  onOpenWorker={onOpenWorkerPanel}
+                />
+              ))}
             </div>
           )}
 

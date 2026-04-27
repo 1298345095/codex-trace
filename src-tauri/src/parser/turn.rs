@@ -711,6 +711,36 @@ mod tests {
     }
 
     #[test]
+    fn marks_failed_spawn_agent_output_without_child_link() {
+        let failure =
+            "Full-history forked agents inherit the parent agent type, model, and reasoning effort; omit agent_type, model, and reasoning_effort, or spawn without a full-history fork.";
+        let line = format!(
+            r#"{{"timestamp":"2026-04-27T04:52:03Z","type":"response_item","payload":{{"type":"function_call_output","call_id":"call_spawn","output":{failure:?}}}}}"#
+        );
+        let lines = [
+            r#"{"timestamp":"2026-04-27T04:52:00Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-27T04:52:00Z"}}"#.to_string(),
+            r#"{"timestamp":"2026-04-27T04:52:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#.to_string(),
+            r#"{"timestamp":"2026-04-27T04:52:02Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"fork_context\":true,\"message\":\"Collect evidence\"}","call_id":"call_spawn"}}"#.to_string(),
+            line,
+            r#"{"timestamp":"2026-04-27T04:52:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279924.0}}"#.to_string(),
+        ];
+        let entries: Vec<RawEntry> = lines
+            .iter()
+            .filter_map(|line| RawEntry::parse(line))
+            .collect();
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert!(turns[0].collab_spawns.is_empty());
+        assert_eq!(turns[0].tool_calls.len(), 1);
+        let tool = &turns[0].tool_calls[0];
+        assert_eq!(tool.kind, ToolKind::SpawnAgent);
+        assert_eq!(tool.status, "failed");
+        assert_eq!(tool.output.as_deref(), Some(failure));
+    }
+
+    #[test]
     fn classifies_sdk_exec_command_function_output() {
         let entries = entries(&[
             r#"{"timestamp":"2026-04-27T04:53:00Z","type":"session_meta","payload":{"id":"worker","timestamp":"2026-04-27T04:53:00Z"}}"#,

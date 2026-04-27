@@ -21,11 +21,8 @@ interface ToolCallItemProps {
   tool: CodexToolCall;
   expanded: boolean;
   onToggle: () => void;
-  /** For spawn_agent: the worker session id to open in the panel. */
-  workerSessionId?: string;
-  /** Whether the worker panel for this spawn is currently open. */
   isWorkerOpen?: boolean;
-  onOpenWorker?: (sessionId: string) => void;
+  onOpenWorker?: (tool: CodexToolCall) => void;
 }
 
 function kindIcon(kind: CodexToolCall["kind"], failed: boolean) {
@@ -88,7 +85,6 @@ export function ToolCallItem({
   tool,
   expanded,
   onToggle,
-  workerSessionId,
   isWorkerOpen,
   onOpenWorker,
 }: ToolCallItemProps) {
@@ -134,20 +130,20 @@ export function ToolCallItem({
         {tool.duration_secs !== null && (
           <span className="tool-call__duration">{formatDuration(tool.duration_secs * 1000)}</span>
         )}
-        {tool.kind === "spawn_agent" && workerSessionId && onOpenWorker && (
+        {tool.kind === "spawn_agent" && tool.worker_session && onOpenWorker && (
           <button
             className={`tool-call__worker-btn${isWorkerOpen ? " tool-call__worker-btn--open" : ""}`}
             onClick={(e) => {
               e.stopPropagation();
-              onOpenWorker(workerSessionId);
+              onOpenWorker(tool);
             }}
             title={isWorkerOpen ? "Close worker panel" : "Open worker session"}
           >
-            {isWorkerOpen ? "← Close" : "Open →"}
+            {isWorkerOpen ? "Close" : "Open"}
           </button>
         )}
         <button
-          className={`tool-call__popout-btn${tool.duration_secs === null && !(tool.kind === "spawn_agent" && workerSessionId) ? " tool-call__popout-btn--push" : ""}`}
+          className={`tool-call__popout-btn${tool.duration_secs === null && !(tool.kind === "spawn_agent" && tool.worker_session && onOpenWorker) ? " tool-call__popout-btn--push" : ""}`}
           onClick={(e) => {
             e.stopPropagation();
             setPopout(true);

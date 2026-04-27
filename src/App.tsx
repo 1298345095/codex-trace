@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import type { ViewState, CodexSessionInfo, CodexSession } from "../shared/types";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { ViewState, CodexSessionInfo, CodexToolCall } from "../shared/types";
 import { useSession } from "./hooks/useSession";
 import { usePicker, resolveSessionsDir } from "./hooks/usePicker";
-import { invoke } from "./lib/invoke";
 import { useToggleSet } from "./hooks/useToggleSet";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { SidebarTree } from "./components/SidebarTree";
@@ -16,6 +15,18 @@ import { ViewToolbar } from "./components/ViewToolbar";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { SettingsModal } from "./components/SettingsModal";
 
+function findToolByCallId(tools: CodexToolCall[], callId: string): CodexToolCall | null {
+  for (const tool of tools) {
+    if (tool.call_id === callId) return tool;
+    const childTurns = tool.worker_session?.turns ?? [];
+    for (const turn of childTurns) {
+      const found = findToolByCallId(turn.tool_calls, callId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export function App() {
   const [view, setView] = useState<ViewState>("picker");
   const [selectedTurn, setSelectedTurn] = useState(0);
@@ -24,11 +35,8 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(200);
   const [showSettings, setShowSettings] = useState(false);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
-  const [workerPanel, setWorkerPanel] = useState<CodexSession | null>(null);
-  const [workerPanelSessionId, setWorkerPanelSessionId] = useState<string | null>(null);
-  const [workerPanelNickname, setWorkerPanelNickname] = useState<string | undefined>(undefined);
-  const [workerPanelLoading, setWorkerPanelLoading] = useState(false);
   const [workerPanelWidth, setWorkerPanelWidth] = useState(380);
+  const [workerPanelCallId, setWorkerPanelCallId] = useState<string | null>(null);
 
   const session = useSession();
   const picker = usePicker();
@@ -86,6 +94,11 @@ export function App() {
   }, []);
 
   const turns = session.session?.turns ?? [];
+  const selectedTurnData = turns[selectedTurn];
+  const workerPanelTool = useMemo(() => {
+    if (!workerPanelCallId || !selectedTurnData) return null;
+    return findToolByCallId(selectedTurnData.tool_calls, workerPanelCallId);
+  }, [selectedTurnData, workerPanelCallId]);
 
   const expandAll = useCallback(() => {
     if (view === "detail") {
@@ -100,35 +113,22 @@ export function App() {
 
   const goToSessions = useCallback(() => setView("picker"), []);
 
-  const handleOpenWorkerPanel = useCallback(
-    (sessionId: string, nickname?: string) => {
-      if (workerPanelSessionId === sessionId) {
-        setWorkerPanel(null);
-        setWorkerPanelSessionId(null);
-        setWorkerPanelNickname(undefined);
-        return;
-      }
-      const info = picker.allSessions.find((s) => s.id === sessionId);
-      if (!info) return;
-      setWorkerPanelSessionId(sessionId);
-      setWorkerPanelNickname(nickname);
-      setWorkerPanel(null);
-      setWorkerPanelLoading(true);
-      invoke<CodexSession>("load_session", { path: info.path })
-        .then((loaded) => {
-          setWorkerPanel(loaded);
-          setWorkerPanelLoading(false);
-        })
-        .catch(() => setWorkerPanelLoading(false));
-    },
-    [workerPanelSessionId, picker.allSessions],
-  );
+  const closeWorkerPanel = useCallback(() => setWorkerPanelCallId(null), []);
 
-  const closeWorkerPanel = useCallback(() => {
-    setWorkerPanel(null);
-    setWorkerPanelSessionId(null);
-    setWorkerPanelNickname(undefined);
+  const handleOpenWorkerPanel = useCallback((tool: CodexToolCall) => {
+    if (!tool.worker_session) return;
+    setWorkerPanelCallId((current) => (current === tool.call_id ? null : tool.call_id));
   }, []);
+
+  useEffect(() => {
+    if (view !== "detail") {
+      closeWorkerPanel();
+      return;
+    }
+    if (workerPanelCallId && !workerPanelTool?.worker_session) {
+      closeWorkerPanel();
+    }
+  }, [view, workerPanelCallId, workerPanelTool?.worker_session, closeWorkerPanel]);
 
   // Keyboard navigation
   useKeyboard({
@@ -146,7 +146,7 @@ export function App() {
         handleSelectSession(picker.sessions[pickerSelected]);
     },
     Escape: () => {
-      if (workerPanelSessionId) {
+      if (workerPanelCallId) {
         closeWorkerPanel();
         return;
       }
@@ -154,7 +154,7 @@ export function App() {
       else if (view === "list") setView("picker");
     },
     q: () => {
-      if (workerPanelSessionId) {
+      if (workerPanelCallId) {
         closeWorkerPanel();
         return;
       }
@@ -233,40 +233,23 @@ export function App() {
               expanded={expandedTools}
               onToggle={toggleTool}
               onBack={() => setView("list")}
+              openWorkerCallId={workerPanelCallId}
               onOpenWorkerPanel={handleOpenWorkerPanel}
-              openWorkerSessionId={workerPanelSessionId}
             />
           )}
         </div>
 
-        {view === "detail" && workerPanelSessionId && (
+        {view === "detail" && workerPanelTool?.worker_session && (
           <>
             <ResizeHandle onResize={setWorkerPanelWidth} side="right" />
-            <div className="worker-panel-column" style={{ width: workerPanelWidth }}>
-              <WorkerPanel
-                session={
-                  workerPanel ?? {
-                    id: workerPanelSessionId,
-                    timestamp: "",
-                    cwd: null,
-                    originator: null,
-                    cli_version: null,
-                    model_provider: null,
-                    git: null,
-                    instructions: null,
-                    turns: [],
-                    is_ongoing: false,
-                    total_tokens: null,
-                    thread_name: null,
-                    spawned_worker_ids: [],
-                    path: "",
-                  }
-                }
-                nickname={workerPanelNickname}
-                loading={workerPanelLoading}
-                onClose={closeWorkerPanel}
-              />
-            </div>
+            <WorkerPanel
+              session={workerPanelTool.worker_session}
+              sourceTool={workerPanelTool}
+              activeWorkerCallId={workerPanelCallId}
+              style={{ flex: `0 0 ${workerPanelWidth}px`, maxWidth: workerPanelWidth }}
+              onClose={closeWorkerPanel}
+              onOpenWorker={handleOpenWorkerPanel}
+            />
           </>
         )}
       </div>
