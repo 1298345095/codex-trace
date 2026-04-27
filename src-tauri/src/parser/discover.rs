@@ -218,9 +218,13 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 match pt {
                     "task_started" => {
                         turn_count += 1;
+                        is_ongoing = true;
+                        end_time = None;
                     }
                     "user_message" if turn_count == 0 => {
                         turn_count += 1;
+                        is_ongoing = true;
+                        end_time = None;
                     }
                     "task_complete" => {
                         is_ongoing = false;
@@ -504,5 +508,60 @@ mod tests {
         assert!(child.is_inline_worker);
         assert_eq!(child.worker_nickname.as_deref(), Some("Noether"));
         assert_eq!(child.worker_role.as_deref(), Some("worker"));
+    }
+
+    #[test]
+    fn discover_sessions_marks_later_started_turn_ongoing_after_completed_turn() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/27");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let session_path = day_dir.join("rollout-2026-04-27T17-10-00-active.jsonl");
+        std::fs::write(
+            &session_path,
+            [
+                r#"{"timestamp":"2026-04-27T05:10:00Z","type":"session_meta","payload":{"id":"active","timestamp":"2026-04-27T05:10:00Z","source":"cli"}}"#,
+                r#"{"timestamp":"2026-04-27T05:10:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-27T05:10:02Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777281002.0}}"#,
+                r#"{"timestamp":"2026-04-27T05:10:03Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-2"}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let session = sessions.iter().find(|s| s.id == "active").unwrap();
+
+        assert_eq!(session.turn_count, 2);
+        assert!(session.is_ongoing);
+        assert_eq!(session.end_time, None);
+    }
+
+    #[test]
+    fn discover_sessions_marks_completed_latest_turn_not_ongoing() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/27");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let session_path = day_dir.join("rollout-2026-04-27T17-20-00-complete.jsonl");
+        std::fs::write(
+            &session_path,
+            [
+                r#"{"timestamp":"2026-04-27T05:20:00Z","type":"session_meta","payload":{"id":"complete","timestamp":"2026-04-27T05:20:00Z","source":"cli"}}"#,
+                r#"{"timestamp":"2026-04-27T05:20:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-27T05:20:02Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777281602.0}}"#,
+                r#"{"timestamp":"2026-04-27T05:20:03Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-2"}}"#,
+                r#"{"timestamp":"2026-04-27T05:20:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-2","completed_at":1777281604.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let session = sessions.iter().find(|s| s.id == "complete").unwrap();
+
+        assert_eq!(session.turn_count, 2);
+        assert!(!session.is_ongoing);
+        assert!(session.end_time.is_some());
     }
 }
