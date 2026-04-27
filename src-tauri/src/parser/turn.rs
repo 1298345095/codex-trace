@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use super::entry::{parse_timestamp_secs, RawEntry};
+use super::spawn::parse_spawn_agent_output;
 use super::toolcall::{ToolCall, ToolCallBuilder};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -481,7 +482,7 @@ fn handle_event_msg(
 
 fn handle_response_item(
     entry: &RawEntry,
-    _turns: &mut indexmap::IndexMap<String, CodexTurn>,
+    turns: &mut indexmap::IndexMap<String, CodexTurn>,
     current_turn_id: &Option<String>,
     tool_builders: &mut HashMap<String, ToolCallBuilder>,
 ) {
@@ -532,6 +533,11 @@ fn handle_response_item(
                     .join(""),
                 _ => String::new(),
             };
+            if let Some(spawn) = spawn_from_function_call_output(builder, &call_id, &output) {
+                if let Some(turn) = turns.get_mut(tid) {
+                    turn.collab_spawns.push(spawn);
+                }
+            }
             builder.add_function_call_output(&call_id, &output);
         }
 
@@ -615,4 +621,113 @@ fn str_field(v: &Value, key: &str) -> String {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string()
+}
+
+fn spawn_from_function_call_output(
+    builder: &ToolCallBuilder,
+    call_id: &str,
+    output: &str,
+) -> Option<CollabSpawn> {
+    let pending = builder.pending.get(call_id)?;
+    if pending.name != "spawn_agent" {
+        return None;
+    }
+
+    let parsed = parse_spawn_agent_output(output)?;
+    let message = pending
+        .arguments
+        .get("message")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let prompt_preview = message.chars().take(200).collect();
+    let agent_role = pending
+        .arguments
+        .get("agent_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let model = pending
+        .arguments
+        .get("model")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let reasoning_effort = pending
+        .arguments
+        .get("reasoning_effort")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    Some(CollabSpawn {
+        call_id: call_id.to_string(),
+        new_thread_id: parsed.agent_id,
+        agent_nickname: parsed.nickname,
+        agent_role,
+        model,
+        reasoning_effort,
+        prompt_preview,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::toolcall::ToolKind;
+
+    fn entries(lines: &[&str]) -> Vec<RawEntry> {
+        lines
+            .iter()
+            .filter_map(|line| RawEntry::parse(line))
+            .collect()
+    }
+
+    #[test]
+    fn links_spawn_agent_from_sdk_function_call_output() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-27T04:52:00Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-27T04:52:00Z"}}"#,
+            r#"{"timestamp":"2026-04-27T04:52:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-27T04:52:02Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Collect evidence\",\"model\":\"gpt-5.4-mini\",\"reasoning_effort\":\"medium\"}","call_id":"call_spawn"}}"#,
+            r#"{"timestamp":"2026-04-27T04:52:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn","output":"{\"agent_id\":\"worker-session\",\"nickname\":\"Parfit\"}"}}"#,
+            r#"{"timestamp":"2026-04-27T04:52:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279924.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].collab_spawns.len(), 1);
+        assert_eq!(turns[0].collab_spawns[0].call_id, "call_spawn");
+        assert_eq!(turns[0].collab_spawns[0].new_thread_id, "worker-session");
+        assert_eq!(turns[0].collab_spawns[0].agent_nickname, "Parfit");
+        assert_eq!(turns[0].collab_spawns[0].agent_role, "worker");
+        assert_eq!(
+            turns[0].collab_spawns[0].model.as_deref(),
+            Some("gpt-5.4-mini")
+        );
+        assert_eq!(
+            turns[0].collab_spawns[0].reasoning_effort.as_deref(),
+            Some("medium")
+        );
+        assert_eq!(turns[0].tool_calls.len(), 1);
+        assert_eq!(turns[0].tool_calls[0].kind, ToolKind::SpawnAgent);
+    }
+
+    #[test]
+    fn links_spawn_agent_from_collab_spawn_end_event() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-16T11:48:00Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-16T11:48:00Z"}}"#,
+            r#"{"timestamp":"2026-04-16T11:48:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-16T11:48:02Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Collect graph\"}","call_id":"call_spawn"}}"#,
+            r#"{"timestamp":"2026-04-16T11:48:03Z","type":"event_msg","payload":{"type":"collab_agent_spawn_end","call_id":"call_spawn","sender_thread_id":"parent","new_thread_id":"worker-session","new_agent_nickname":"Noether","new_agent_role":"worker","prompt":"Collect graph","model":"gpt-5.4-mini","reasoning_effort":"medium","status":"pending_init"}}"#,
+            r#"{"timestamp":"2026-04-16T11:48:04Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn","output":"{\"agent_id\":\"worker-session\",\"nickname\":\"Noether\"}"}}"#,
+            r#"{"timestamp":"2026-04-16T11:48:05Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1776335285.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].collab_spawns.len(), 1);
+        assert_eq!(turns[0].collab_spawns[0].new_thread_id, "worker-session");
+        assert_eq!(turns[0].collab_spawns[0].agent_nickname, "Noether");
+        assert_eq!(turns[0].tool_calls.len(), 1);
+        assert_eq!(turns[0].tool_calls[0].kind, ToolKind::SpawnAgent);
+    }
 }

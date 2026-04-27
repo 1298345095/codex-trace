@@ -132,7 +132,9 @@ impl ToolCallBuilder {
     }
 
     /// Register a function_call_output (no typed end event).
-    /// If the pending call has an MCP namespace, classify as McpTool; otherwise Unknown.
+    /// If the pending call has an MCP namespace, classify as McpTool. Built-in
+    /// collaboration calls are also typed here because newer Codex SDK logs do
+    /// not emit the older collab_*_end events.
     pub fn add_function_call_output(&mut self, call_id: &str, output: &str) {
         if let Some(pending) = self.pending.remove(call_id) {
             let (kind, mcp_server, mcp_tool) = match &pending.namespace {
@@ -140,6 +142,9 @@ impl ToolCallBuilder {
                     let (server, tool) = parse_mcp_namespace(ns, &pending.name);
                     (ToolKind::McpTool, server, tool)
                 }
+                _ if pending.name == "spawn_agent" => (ToolKind::SpawnAgent, None, None),
+                _ if pending.name == "wait_agent" => (ToolKind::WaitAgent, None, None),
+                _ if pending.name == "close_agent" => (ToolKind::CloseAgent, None, None),
                 _ => (ToolKind::Unknown, None, None),
             };
             self.finalized.push(ToolCall {

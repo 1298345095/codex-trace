@@ -5,6 +5,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use super::entry::RawEntry;
+use super::spawn::parse_spawn_agent_output;
 
 /// Lightweight session info for the picker list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,6 +185,8 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
     let mut total_tokens: Option<u64> = None;
     let mut end_time: Option<String> = None;
     let mut spawned_worker_ids: Vec<String> = Vec::new();
+    let mut pending_spawn_call_ids: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
     let mut is_ongoing = true;
 
     for line in lines {
@@ -259,7 +262,33 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                             .and_then(|p| p.get("new_thread_id"))
                             .and_then(|v| v.as_str())
                         {
-                            spawned_worker_ids.push(new_id.to_string());
+                            push_unique(&mut spawned_worker_ids, new_id.to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            "response_item" => {
+                let payload = v.get("payload").unwrap_or(&Value::Null);
+                match payload.get("type").and_then(|t| t.as_str()).unwrap_or("") {
+                    "function_call" => {
+                        if payload.get("name").and_then(|v| v.as_str()) == Some("spawn_agent") {
+                            if let Some(call_id) = payload.get("call_id").and_then(|v| v.as_str()) {
+                                pending_spawn_call_ids.insert(call_id.to_string());
+                            }
+                        }
+                    }
+                    "function_call_output" => {
+                        let Some(call_id) = payload.get("call_id").and_then(|v| v.as_str()) else {
+                            continue;
+                        };
+                        if !pending_spawn_call_ids.contains(call_id) {
+                            continue;
+                        }
+                        if let Some(output) = output_text(payload) {
+                            if let Some(spawn) = parse_spawn_agent_output(&output) {
+                                push_unique(&mut spawned_worker_ids, spawn.agent_id);
+                            }
                         }
                     }
                     _ => {}
@@ -343,15 +372,108 @@ fn opt_str(v: &Value, key: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+fn output_text(payload: &Value) -> Option<String> {
+    match payload.get("output") {
+        Some(Value::String(s)) => Some(s.clone()),
+        Some(Value::Array(arr)) => Some(
+            arr.iter()
+                .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join(""),
+        ),
+        _ => None,
+    }
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    if !values.contains(&value) {
+        values.push(value);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use tempfile::tempdir;
 
     #[test]
     fn date_group_from_path_test() {
         let path = PathBuf::from("/home/user/.codex/sessions/2026/04/25/rollout-abc.jsonl");
         let dg = date_group_from_path(&path);
         assert_eq!(dg, "2026/04/25");
+    }
+
+    #[test]
+    fn discover_sessions_links_sdk_spawn_agent_output() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/27");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let parent_path = day_dir.join("rollout-2026-04-27T16-50-45-019dcd46-parent.jsonl");
+        std::fs::write(
+            &parent_path,
+            [
+                r#"{"timestamp":"2026-04-27T04:50:45Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-27T04:50:45Z","source":"exec"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:02Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Collect evidence\"}","call_id":"call_spawn"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn","output":"{\"agent_id\":\"worker\",\"nickname\":\"Parfit\"}"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279924.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let child_path = day_dir.join("rollout-2026-04-27T16-52-43-worker.jsonl");
+        std::fs::write(
+            &child_path,
+            r#"{"timestamp":"2026-04-27T04:52:43Z","type":"session_meta","payload":{"id":"worker","timestamp":"2026-04-27T04:52:43Z","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent","depth":1,"agent_nickname":"Parfit","agent_role":"worker"}}}}}"#,
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let parent = sessions.iter().find(|s| s.id == "parent").unwrap();
+        let child = sessions.iter().find(|s| s.id == "worker").unwrap();
+
+        assert_eq!(parent.spawned_worker_ids, vec!["worker"]);
+        assert!(child.is_external_worker);
+        assert!(child.is_inline_worker);
+    }
+
+    #[test]
+    fn discover_sessions_links_collab_spawn_end_event() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/16");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let parent_path = day_dir.join("rollout-2026-04-16T11-38-08-019d9382-parent.jsonl");
+        std::fs::write(
+            &parent_path,
+            [
+                r#"{"timestamp":"2026-04-16T11:38:08Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-16T11:38:08Z","source":"cli"}}"#,
+                r#"{"timestamp":"2026-04-16T11:48:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-16T11:48:02Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Collect graph\"}","call_id":"call_spawn"}}"#,
+                r#"{"timestamp":"2026-04-16T11:48:03Z","type":"event_msg","payload":{"type":"collab_agent_spawn_end","call_id":"call_spawn","sender_thread_id":"parent","new_thread_id":"worker","new_agent_nickname":"Noether","new_agent_role":"worker","prompt":"Collect graph","status":"pending_init"}}"#,
+                r#"{"timestamp":"2026-04-16T11:48:04Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn","output":"{\"agent_id\":\"worker\",\"nickname\":\"Noether\"}"}}"#,
+                r#"{"timestamp":"2026-04-16T11:48:05Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1776335285.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let child_path = day_dir.join("rollout-2026-04-16T11-48-09-worker.jsonl");
+        std::fs::write(
+            &child_path,
+            r#"{"timestamp":"2026-04-16T11:48:09Z","type":"session_meta","payload":{"id":"worker","timestamp":"2026-04-16T11:48:09Z","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent","depth":1,"agent_nickname":"Noether","agent_role":"worker"}}}}}"#,
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let parent = sessions.iter().find(|s| s.id == "parent").unwrap();
+        let child = sessions.iter().find(|s| s.id == "worker").unwrap();
+
+        assert_eq!(parent.spawned_worker_ids, vec!["worker"]);
+        assert!(child.is_external_worker);
+        assert!(child.is_inline_worker);
     }
 }

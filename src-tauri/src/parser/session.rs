@@ -194,6 +194,7 @@ pub fn resolve_sessions_dir(configured: Option<&str>) -> Result<std::path::PathB
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use tempfile::tempdir;
 
     #[test]
     fn default_sessions_dir_exists() {
@@ -232,5 +233,31 @@ mod tests {
         assert!(result.is_ok(), "parse_session failed: {:?}", result.err());
         let session = result.unwrap();
         assert!(!session.id.is_empty(), "session id should not be empty");
+    }
+
+    #[test]
+    fn parse_session_collects_sdk_spawn_agent_output_workers() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("rollout-2026-04-27T16-50-45-parent.jsonl");
+        std::fs::write(
+            &path,
+            [
+                r#"{"timestamp":"2026-04-27T04:50:45Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-27T04:50:45Z"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:02Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Collect evidence\"}","call_id":"call_spawn"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn","output":"{\"agent_id\":\"worker-session\",\"nickname\":\"Parfit\"}"}}"#,
+                r#"{"timestamp":"2026-04-27T04:52:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279924.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let session = parse_session(&path).unwrap();
+
+        assert_eq!(session.spawned_worker_ids, vec!["worker-session"]);
+        assert_eq!(
+            session.turns[0].collab_spawns[0].new_thread_id,
+            "worker-session"
+        );
     }
 }
