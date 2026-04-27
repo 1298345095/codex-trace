@@ -10,6 +10,23 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
+const CODEX_CONTEXT_BASELINE_TOKENS = 12_000;
+
+/** Matches Codex TUI's "Context XX% left" calculation. */
+export function contextRemainingPercent(
+  contextWindowTokens: number | null | undefined,
+  modelContextWindow: number,
+): number | null {
+  if (contextWindowTokens === null || contextWindowTokens === undefined) return null;
+  if (modelContextWindow <= CODEX_CONTEXT_BASELINE_TOKENS) return null;
+
+  const effectiveWindow = modelContextWindow - CODEX_CONTEXT_BASELINE_TOKENS;
+  const used = Math.max(contextWindowTokens - CODEX_CONTEXT_BASELINE_TOKENS, 0);
+  const remaining = Math.max(effectiveWindow - used, 0);
+  const percent = (remaining / effectiveWindow) * 100;
+  return Math.round(Math.max(0, Math.min(100, percent)));
+}
+
 /** Formats USD cost: 1.5 -> "$1.50" */
 export function formatCost(usd: number): string {
   return "$" + usd.toFixed(2);

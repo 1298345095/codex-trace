@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatDuration, formatTokens, shortPath, timeAgo, truncate } from "./format";
+import {
+  contextRemainingPercent,
+  formatDuration,
+  formatTokens,
+  shortPath,
+  timeAgo,
+  truncate,
+} from "./format";
 
 describe("formatDuration", () => {
   it("returns '< 1ms' for zero", () => {
@@ -49,6 +56,28 @@ describe("formatTokens", () => {
   it("formats millions with M suffix", () => {
     expect(formatTokens(1_000_000)).toBe("1.0M");
     expect(formatTokens(2_500_000)).toBe("2.5M");
+  });
+});
+
+describe("contextRemainingPercent", () => {
+  it("uses Codex's 12k baseline before calculating remaining context", () => {
+    expect(contextRemainingPercent(26_000, 100_000)).toBe(84);
+  });
+
+  it("returns 100 when usage is below the fixed baseline", () => {
+    expect(contextRemainingPercent(5_000, 100_000)).toBe(100);
+  });
+
+  it("clamps exhausted context to 0", () => {
+    expect(contextRemainingPercent(150_000, 100_000)).toBe(0);
+  });
+
+  it("returns null when context usage is unknown", () => {
+    expect(contextRemainingPercent(null, 100_000)).toBeNull();
+  });
+
+  it("returns null when the window cannot cover the fixed baseline", () => {
+    expect(contextRemainingPercent(5_000, 12_000)).toBeNull();
   });
 });
 

@@ -1136,6 +1136,9 @@ body {
 }
 
 .message-detail__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   color: var(--text-secondary);
   margin-left: auto;
@@ -1144,6 +1147,21 @@ body {
   text-overflow: ellipsis;
   min-width: 0;
   flex-shrink: 1;
+}
+
+.message-detail__meta-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.message-detail__context.info-bar__context {
+  margin-left: 0;
+  color: var(--text-secondary);
+}
+
+.message-detail__context .info-bar__context-bar {
+  background: var(--bg-elevated);
 }
 
 .message-detail__body {

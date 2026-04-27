@@ -10,6 +10,7 @@ export interface TokenInfo {
   output_tokens: number;
   reasoning_output_tokens: number;
   total_tokens: number;
+  context_window_tokens: number | null;
   model_context_window: number;
 }
 

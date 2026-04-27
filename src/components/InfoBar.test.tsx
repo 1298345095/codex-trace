@@ -9,6 +9,7 @@ const TOKEN_INFO: TokenInfo = {
   output_tokens: 500,
   reasoning_output_tokens: 0,
   total_tokens: 1500,
+  context_window_tokens: 1500,
   model_context_window: 8000,
 };
 

@@ -30,6 +30,7 @@ pub struct TokenInfo {
     pub output_tokens: u64,
     pub reasoning_output_tokens: u64,
     pub total_tokens: u64,
+    pub context_window_tokens: Option<u64>,
     pub model_context_window: u64,
 }
 
@@ -334,6 +335,10 @@ fn handle_event_msg(
                 if let Some(turn) = turns.get_mut(tid) {
                     if let Some(info) = payload.get("info").filter(|v| !v.is_null()) {
                         if let Some(total) = info.get("total_token_usage") {
+                            let context_window_tokens = info
+                                .get("last_token_usage")
+                                .and_then(|last| last.get("total_tokens"))
+                                .and_then(|v| v.as_u64());
                             turn.total_tokens = Some(TokenInfo {
                                 input_tokens: u64_field(total, "input_tokens"),
                                 cached_input_tokens: u64_field(total, "cached_input_tokens"),
@@ -343,6 +348,7 @@ fn handle_event_msg(
                                     "reasoning_output_tokens",
                                 ),
                                 total_tokens: u64_field(total, "total_tokens"),
+                                context_window_tokens,
                                 model_context_window: u64_field(info, "model_context_window"),
                             });
                         }
@@ -708,6 +714,23 @@ mod tests {
         );
         assert_eq!(turns[0].tool_calls.len(), 1);
         assert_eq!(turns[0].tool_calls[0].kind, ToolKind::SpawnAgent);
+    }
+
+    #[test]
+    fn records_context_window_tokens_from_last_token_usage() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-27T04:52:00Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-27T04:52:00Z"}}"#,
+            r#"{"timestamp":"2026-04-27T04:52:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-27T04:52:02Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":38000,"cached_input_tokens":12000,"output_tokens":2000,"reasoning_output_tokens":500,"total_tokens":40000},"last_token_usage":{"input_tokens":24000,"cached_input_tokens":8000,"output_tokens":1500,"reasoning_output_tokens":200,"total_tokens":26000},"model_context_window":100000}}}"#,
+            r#"{"timestamp":"2026-04-27T04:52:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279923.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        let tokens = turns[0].total_tokens.as_ref().expect("token count");
+        assert_eq!(tokens.total_tokens, 40000);
+        assert_eq!(tokens.context_window_tokens, Some(26000));
+        assert_eq!(tokens.model_context_window, 100000);
     }
 
     #[test]

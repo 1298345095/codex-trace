@@ -4,8 +4,8 @@ import { OngoingDots } from "./OngoingDots";
 import { BackIcon, CodexIcon } from "./Icons";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { shortModel, formatExactTime } from "../lib/format";
-import { getModelColor } from "../lib/theme";
-import { formatTokens, formatDuration } from "../../shared/format";
+import { getContextColor, getModelColor } from "../lib/theme";
+import { contextRemainingPercent, formatTokens, formatDuration } from "../../shared/format";
 
 interface TurnDetailProps {
   turn: CodexTurn;
@@ -36,6 +36,17 @@ export function TurnDetail({
   if (turn.total_tokens?.total_tokens)
     metaParts.push(`${formatTokens(turn.total_tokens.total_tokens)} tok`);
   if (turn.duration_ms) metaParts.push(formatDuration(turn.duration_ms));
+  const tokenInfo = turn.total_tokens;
+  const contextLeftPercent = tokenInfo
+    ? contextRemainingPercent(tokenInfo.context_window_tokens, tokenInfo.model_context_window)
+    : null;
+  const contextUsedPercent = contextLeftPercent === null ? null : 100 - contextLeftPercent;
+  const contextTitle =
+    tokenInfo && tokenInfo.context_window_tokens !== null
+      ? `${formatTokens(tokenInfo.context_window_tokens)} / ${formatTokens(
+          tokenInfo.model_context_window,
+        )} context tokens`
+      : undefined;
 
   return (
     <div className="turn-detail">
@@ -49,8 +60,26 @@ export function TurnDetail({
         <span className="message-detail__title">Codex</span>
         {model && <span style={{ color: modelColor, fontWeight: 600, fontSize: 12 }}>{model}</span>}
         {turn.status === "ongoing" && <OngoingDots count={3} />}
-        {metaParts.length > 0 && (
-          <span className="message-detail__meta">{metaParts.join(" · ")}</span>
+        {(contextLeftPercent !== null || metaParts.length > 0) && (
+          <span className="message-detail__meta">
+            {contextLeftPercent !== null && contextUsedPercent !== null && (
+              <span className="message-detail__context info-bar__context" title={contextTitle}>
+                <span>ctx {contextLeftPercent}% left</span>
+                <span className="info-bar__context-bar">
+                  <span
+                    className="info-bar__context-fill"
+                    style={{
+                      width: `${contextUsedPercent}%`,
+                      backgroundColor: getContextColor(contextUsedPercent),
+                    }}
+                  />
+                </span>
+              </span>
+            )}
+            {metaParts.length > 0 && (
+              <span className="message-detail__meta-text">{metaParts.join(" · ")}</span>
+            )}
+          </span>
         )}
       </div>
 
