@@ -711,6 +711,117 @@ mod tests {
     }
 
     #[test]
+    fn classifies_sdk_exec_command_function_output() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-27T04:53:00Z","type":"session_meta","payload":{"id":"worker","timestamp":"2026-04-27T04:53:00Z"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"printf hello\",\"workdir\":\"/tmp\",\"yield_time_ms\":1000}","call_id":"call_exec"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_exec","output":"Chunk ID: abc123\nWall time: 0.2500 seconds\nProcess exited with code 0\nOriginal token count: 1\nOutput:\nhello\n"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279984.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].tool_calls.len(), 1);
+        let tool = &turns[0].tool_calls[0];
+        assert_eq!(tool.kind, ToolKind::ExecCommand);
+        assert_eq!(tool.name, "exec_command");
+        assert_eq!(tool.output.as_deref(), Some("hello\n"));
+        assert_eq!(tool.exit_code, Some(0));
+        assert_eq!(tool.status, "completed");
+        assert_eq!(
+            tool.command.as_ref().unwrap(),
+            &vec!["printf hello".to_string()]
+        );
+        assert_eq!(tool.cwd.as_deref(), Some("/tmp"));
+    }
+
+    #[test]
+    fn folds_write_stdin_output_into_running_sdk_exec_command() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-27T04:53:00Z","type":"session_meta","payload":{"id":"worker","timestamp":"2026-04-27T04:53:00Z"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"node slack.js history --channel '#ai-tools-on-call'\",\"workdir\":\"/workspace\",\"yield_time_ms\":1000}","call_id":"call_exec"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_exec","output":"Chunk ID: e6e3cc\nWall time: 1.0020 seconds\nProcess running with session ID 72266\nOriginal token count: 0\nOutput:\n"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:04Z","type":"response_item","payload":{"type":"function_call","name":"write_stdin","arguments":"{\"session_id\":72266,\"chars\":\"\",\"yield_time_ms\":1000,\"max_output_tokens\":30000}","call_id":"call_poll"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:05Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_poll","output":"Chunk ID: 507212\nWall time: 0.0000 seconds\nProcess exited with code 1\nOriginal token count: 19\nOutput:\n{\n  \"ok\": false,\n  \"error\": \"Slack API error: enterprise_is_restricted\"\n}\n"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:06Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279986.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].tool_calls.len(), 1);
+        let tool = &turns[0].tool_calls[0];
+        assert_eq!(tool.call_id, "call_exec");
+        assert_eq!(tool.kind, ToolKind::ExecCommand);
+        assert_eq!(tool.name, "exec_command");
+        assert_eq!(tool.exit_code, Some(1));
+        assert_eq!(tool.status, "failed");
+        assert!(tool
+            .output
+            .as_deref()
+            .unwrap()
+            .contains("Slack API error: enterprise_is_restricted"));
+        assert_eq!(
+            tool.command.as_ref().unwrap(),
+            &vec!["node slack.js history --channel '#ai-tools-on-call'".to_string()]
+        );
+        assert_eq!(tool.cwd.as_deref(), Some("/workspace"));
+    }
+
+    #[test]
+    fn preserves_unwrapped_sdk_exec_output() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-27T04:53:00Z","type":"session_meta","payload":{"id":"worker","timestamp":"2026-04-27T04:53:00Z"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"tool with changed output shape\",\"workdir\":\"/tmp\"}","call_id":"call_exec"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_exec","output":"plain future transport output\nstill visible\n"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279984.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].tool_calls.len(), 1);
+        let tool = &turns[0].tool_calls[0];
+        assert_eq!(tool.kind, ToolKind::ExecCommand);
+        assert_eq!(
+            tool.output.as_deref(),
+            Some("plain future transport output\nstill visible\n")
+        );
+        assert_eq!(tool.status, "completed");
+    }
+
+    #[test]
+    fn folds_single_running_exec_without_session_id_mapping() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-27T04:53:00Z","type":"session_meta","payload":{"id":"worker","timestamp":"2026-04-27T04:53:00Z"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"long command\",\"workdir\":\"/workspace\"}","call_id":"call_exec"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_exec","output":"still running under a future transport shape\n"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:04Z","type":"response_item","payload":{"type":"function_call","name":"write_stdin","arguments":"{\"session_id\":123,\"chars\":\"\"}","call_id":"call_poll"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:05Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_poll","output":"final chunk under a future transport shape\n"}}"#,
+            r#"{"timestamp":"2026-04-27T04:53:06Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1777279986.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].tool_calls.len(), 1);
+        let tool = &turns[0].tool_calls[0];
+        assert_eq!(tool.call_id, "call_exec");
+        assert_eq!(tool.kind, ToolKind::ExecCommand);
+        assert!(tool
+            .output
+            .as_deref()
+            .unwrap()
+            .contains("final chunk under a future transport shape"));
+        assert_eq!(tool.status, "completed");
+    }
+
+    #[test]
     fn links_spawn_agent_from_collab_spawn_end_event() {
         let entries = entries(&[
             r#"{"timestamp":"2026-04-16T11:48:00Z","type":"session_meta","payload":{"id":"parent","timestamp":"2026-04-16T11:48:00Z"}}"#,

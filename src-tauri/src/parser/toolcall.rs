@@ -53,6 +53,8 @@ pub struct PendingCall {
 pub struct ToolCallBuilder {
     pub pending: HashMap<String, PendingCall>,
     pub finalized: Vec<ToolCall>,
+    pty_sessions: HashMap<String, String>,
+    running_exec_call_ids: Vec<String>,
 }
 
 impl ToolCallBuilder {
@@ -60,6 +62,8 @@ impl ToolCallBuilder {
         Self {
             pending: HashMap::new(),
             finalized: Vec::new(),
+            pty_sessions: HashMap::new(),
+            running_exec_call_ids: Vec::new(),
         }
     }
 
@@ -137,6 +141,61 @@ impl ToolCallBuilder {
     /// not emit the older collab_*_end events.
     pub fn add_function_call_output(&mut self, call_id: &str, output: &str) {
         if let Some(pending) = self.pending.remove(call_id) {
+            if pending.name == "exec_command" {
+                let parsed_output = parse_exec_function_output(output);
+                if let Some(session_id) = &parsed_output.running_session_id {
+                    self.pty_sessions
+                        .insert(session_id.clone(), call_id.to_string());
+                }
+                if parsed_output.status == "running" {
+                    push_unique(&mut self.running_exec_call_ids, call_id.to_string());
+                }
+                self.finalized.push(exec_tool_call_from_pending(
+                    call_id.to_string(),
+                    pending,
+                    parsed_output,
+                ));
+                return;
+            }
+
+            if pending.name == "write_stdin" {
+                let parsed_output = parse_exec_function_output(output);
+                let original_call_id = session_id_from_arguments(&pending.arguments)
+                    .and_then(|session_id| {
+                        self.pty_sessions
+                            .get(&session_id)
+                            .cloned()
+                            .map(|call_id| (call_id, Some(session_id)))
+                    })
+                    .or_else(|| {
+                        self.single_running_exec_call_id()
+                            .map(|call_id| (call_id, None))
+                    });
+
+                if let Some((original_call_id, session_id)) = original_call_id {
+                    self.merge_pty_output(&original_call_id, parsed_output);
+                    if !self
+                        .finalized
+                        .iter()
+                        .any(|tc| tc.call_id == original_call_id && tc.status == "running")
+                    {
+                        self.running_exec_call_ids
+                            .retain(|call_id| call_id != &original_call_id);
+                        if let Some(session_id) = session_id {
+                            self.pty_sessions.remove(&session_id);
+                        }
+                    }
+                    return;
+                }
+
+                self.finalized.push(exec_tool_call_from_pending(
+                    call_id.to_string(),
+                    pending,
+                    parsed_output,
+                ));
+                return;
+            }
+
             let (kind, mcp_server, mcp_tool) = match &pending.namespace {
                 Some(ns) if ns.starts_with("mcp__") => {
                     let (server, tool) = parse_mcp_namespace(ns, &pending.name);
@@ -167,6 +226,36 @@ impl ToolCallBuilder {
                 image_prompt: None,
                 status: "completed".to_string(),
             });
+        }
+    }
+
+    fn merge_pty_output(&mut self, original_call_id: &str, output: ExecFunctionOutput) {
+        let Some(tool_call) = self
+            .finalized
+            .iter_mut()
+            .find(|tc| tc.call_id == original_call_id)
+        else {
+            return;
+        };
+
+        append_output(&mut tool_call.output, output.output);
+        if output.exit_code.is_some() {
+            tool_call.exit_code = output.exit_code;
+        }
+        if output.duration_secs.is_some() {
+            tool_call.duration_secs =
+                Some(tool_call.duration_secs.unwrap_or(0.0) + output.duration_secs.unwrap_or(0.0));
+        }
+        tool_call.status = output.status;
+    }
+
+    fn single_running_exec_call_id(&self) -> Option<String> {
+        let mut running = self.running_exec_call_ids.iter();
+        let first = running.next()?;
+        if running.next().is_none() {
+            Some(first.clone())
+        } else {
+            None
         }
     }
 
@@ -524,6 +613,220 @@ impl ToolCallBuilder {
             .collect();
         self.finalized
             .retain(|tc| tc.kind != ToolKind::Unknown || !paired.contains(&tc.call_id));
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ExecFunctionOutput {
+    output: Option<String>,
+    exit_code: Option<i32>,
+    duration_secs: Option<f64>,
+    running_session_id: Option<String>,
+    status: String,
+}
+
+fn exec_tool_call_from_pending(
+    call_id: String,
+    pending: PendingCall,
+    parsed_output: ExecFunctionOutput,
+) -> ToolCall {
+    let command = command_from_arguments(&pending.arguments);
+    let cwd = cwd_from_arguments(&pending.arguments);
+
+    ToolCall {
+        call_id,
+        kind: ToolKind::ExecCommand,
+        name: pending.name,
+        arguments: pending.arguments,
+        input_text: pending.input_text,
+        output: parsed_output.output,
+        exit_code: parsed_output.exit_code,
+        command,
+        cwd,
+        duration_secs: parsed_output.duration_secs,
+        mcp_server: None,
+        mcp_tool: None,
+        patch_success: None,
+        patch_changes: None,
+        web_query: None,
+        web_url: None,
+        image_prompt: None,
+        status: parsed_output.status,
+    }
+}
+
+fn command_from_arguments(arguments: &Value) -> Option<Vec<String>> {
+    if let Some(cmd) = arguments.get("cmd").and_then(|v| v.as_str()) {
+        return Some(vec![cmd.to_string()]);
+    }
+    arguments
+        .get("command")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+}
+
+fn cwd_from_arguments(arguments: &Value) -> Option<String> {
+    ["workdir", "cwd"].iter().find_map(|key| {
+        arguments
+            .get(*key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    })
+}
+
+fn session_id_from_arguments(arguments: &Value) -> Option<String> {
+    arguments
+        .get("session_id")
+        .and_then(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .or_else(|| v.as_i64().map(|n| n.to_string()))
+        })
+        .filter(|s| !s.is_empty())
+}
+
+fn parse_exec_function_output(output: &str) -> ExecFunctionOutput {
+    let duration_secs = parse_wall_time(output);
+    let exit_code = parse_process_exit_code(output);
+    let running_session_id = parse_running_session_id(output);
+    let tool_output = display_output(output);
+    let status = if exit_code.map(|code| code != 0).unwrap_or(false) {
+        "failed"
+    } else if running_session_id.is_some() || likely_running_output(output, exit_code) {
+        "running"
+    } else {
+        "completed"
+    }
+    .to_string();
+
+    ExecFunctionOutput {
+        output: tool_output,
+        exit_code,
+        duration_secs,
+        running_session_id,
+        status,
+    }
+}
+
+fn display_output(output: &str) -> Option<String> {
+    if output.is_empty() {
+        return None;
+    }
+
+    Some(
+        payload_after_output_marker(output)
+            .filter(|payload| !payload.is_empty())
+            .unwrap_or(output)
+            .to_string(),
+    )
+}
+
+fn payload_after_output_marker(output: &str) -> Option<&str> {
+    let mut offset = 0;
+    for line in output.split_inclusive('\n') {
+        let line_start = offset;
+        offset += line.len();
+        if line.trim_end_matches('\n').trim_end_matches('\r').trim() == "Output:" {
+            return Some(&output[offset..]);
+        }
+        if line_start == output.len() {
+            break;
+        }
+    }
+    None
+}
+
+fn parse_wall_time(output: &str) -> Option<f64> {
+    output.lines().find_map(|line| {
+        let lower = line.to_ascii_lowercase();
+        if lower.contains("wall") && lower.contains("time") {
+            parse_first_f64(line)
+        } else {
+            None
+        }
+    })
+}
+
+fn parse_process_exit_code(output: &str) -> Option<i32> {
+    output.lines().find_map(|line| {
+        let lower = line.to_ascii_lowercase();
+        if lower.contains("exit") && lower.contains("code") {
+            parse_first_i32(line)
+        } else {
+            None
+        }
+    })
+}
+
+fn parse_running_session_id(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let lower = line.to_ascii_lowercase();
+        let marker = "session id";
+        let marker_index = lower.find(marker)?;
+        let after_marker = &line[marker_index + marker.len()..];
+        let id: String = after_marker
+            .chars()
+            .skip_while(|c| c.is_whitespace() || matches!(c, ':' | '='))
+            .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+            .collect();
+        if id.is_empty() {
+            None
+        } else {
+            Some(id)
+        }
+    })
+}
+
+fn likely_running_output(output: &str, exit_code: Option<i32>) -> bool {
+    exit_code.is_none() && output.to_ascii_lowercase().contains("running")
+}
+
+fn parse_first_f64(text: &str) -> Option<f64> {
+    let mut number = String::new();
+    let mut started = false;
+    for c in text.chars() {
+        if c.is_ascii_digit() || (started && c == '.') {
+            number.push(c);
+            started = true;
+        } else if started {
+            break;
+        }
+    }
+    number.parse().ok()
+}
+
+fn parse_first_i32(text: &str) -> Option<i32> {
+    let mut number = String::new();
+    let mut started = false;
+    for c in text.chars() {
+        if c.is_ascii_digit() || (!started && c == '-') {
+            number.push(c);
+            started = true;
+        } else if started {
+            break;
+        }
+    }
+    number.parse().ok()
+}
+
+fn append_output(current: &mut Option<String>, next: Option<String>) {
+    let Some(next) = next else {
+        return;
+    };
+
+    match current {
+        Some(current) if !current.is_empty() => {
+            if !current.ends_with('\n') && !next.starts_with('\n') {
+                current.push('\n');
+            }
+            current.push_str(&next);
+        }
+        _ => *current = Some(next),
+    }
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    if !values.contains(&value) {
+        values.push(value);
     }
 }
 
