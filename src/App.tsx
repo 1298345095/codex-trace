@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { ViewState, CodexSessionInfo } from "../shared/types";
+import type { ViewState, CodexSessionInfo, CodexSession } from "../shared/types";
 import { useSession } from "./hooks/useSession";
 import { usePicker, resolveSessionsDir } from "./hooks/usePicker";
+import { invoke } from "./lib/invoke";
 import { useToggleSet } from "./hooks/useToggleSet";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { SidebarTree } from "./components/SidebarTree";
 import { SessionPicker } from "./components/SessionPicker";
 import { TurnList } from "./components/TurnList";
 import { TurnDetail } from "./components/TurnDetail";
+import { WorkerPanel } from "./components/WorkerPanel";
 import { InfoBar } from "./components/InfoBar";
 import { KeybindBar } from "./components/KeybindBar";
 import { ViewToolbar } from "./components/ViewToolbar";
@@ -22,6 +24,11 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(200);
   const [showSettings, setShowSettings] = useState(false);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+  const [workerPanel, setWorkerPanel] = useState<CodexSession | null>(null);
+  const [workerPanelSessionId, setWorkerPanelSessionId] = useState<string | null>(null);
+  const [workerPanelNickname, setWorkerPanelNickname] = useState<string | undefined>(undefined);
+  const [workerPanelLoading, setWorkerPanelLoading] = useState(false);
+  const [workerPanelWidth, setWorkerPanelWidth] = useState(380);
 
   const session = useSession();
   const picker = usePicker();
@@ -93,13 +100,35 @@ export function App() {
 
   const goToSessions = useCallback(() => setView("picker"), []);
 
-  const handleLoadWorker = useCallback(
-    (sessionId: string) => {
-      const worker = picker.allSessions.find((s) => s.id === sessionId);
-      if (worker) handleSelectSession(worker);
+  const handleOpenWorkerPanel = useCallback(
+    (sessionId: string, nickname?: string) => {
+      if (workerPanelSessionId === sessionId) {
+        setWorkerPanel(null);
+        setWorkerPanelSessionId(null);
+        setWorkerPanelNickname(undefined);
+        return;
+      }
+      const info = picker.allSessions.find((s) => s.id === sessionId);
+      if (!info) return;
+      setWorkerPanelSessionId(sessionId);
+      setWorkerPanelNickname(nickname);
+      setWorkerPanel(null);
+      setWorkerPanelLoading(true);
+      invoke<CodexSession>("load_session", { path: info.path })
+        .then((loaded) => {
+          setWorkerPanel(loaded);
+          setWorkerPanelLoading(false);
+        })
+        .catch(() => setWorkerPanelLoading(false));
     },
-    [picker.allSessions, handleSelectSession],
+    [workerPanelSessionId, picker.allSessions],
   );
+
+  const closeWorkerPanel = useCallback(() => {
+    setWorkerPanel(null);
+    setWorkerPanelSessionId(null);
+    setWorkerPanelNickname(undefined);
+  }, []);
 
   // Keyboard navigation
   useKeyboard({
@@ -117,10 +146,18 @@ export function App() {
         handleSelectSession(picker.sessions[pickerSelected]);
     },
     Escape: () => {
+      if (workerPanelSessionId) {
+        closeWorkerPanel();
+        return;
+      }
       if (view === "detail") setView("list");
       else if (view === "list") setView("picker");
     },
     q: () => {
+      if (workerPanelSessionId) {
+        closeWorkerPanel();
+        return;
+      }
       if (view === "detail") setView("list");
       else if (view === "list") setView("picker");
     },
@@ -196,10 +233,42 @@ export function App() {
               expanded={expandedTools}
               onToggle={toggleTool}
               onBack={() => setView("list")}
-              onLoadWorker={handleLoadWorker}
+              onOpenWorkerPanel={handleOpenWorkerPanel}
+              openWorkerSessionId={workerPanelSessionId}
             />
           )}
         </div>
+
+        {view === "detail" && workerPanelSessionId && (
+          <>
+            <ResizeHandle onResize={setWorkerPanelWidth} side="right" />
+            <div className="worker-panel-column" style={{ width: workerPanelWidth }}>
+              <WorkerPanel
+                session={
+                  workerPanel ?? {
+                    id: workerPanelSessionId,
+                    timestamp: "",
+                    cwd: null,
+                    originator: null,
+                    cli_version: null,
+                    model_provider: null,
+                    git: null,
+                    instructions: null,
+                    turns: [],
+                    is_ongoing: false,
+                    total_tokens: null,
+                    thread_name: null,
+                    spawned_worker_ids: [],
+                    path: "",
+                  }
+                }
+                nickname={workerPanelNickname}
+                loading={workerPanelLoading}
+                onClose={closeWorkerPanel}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Bottom keybind bar */}

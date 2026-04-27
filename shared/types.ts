@@ -113,6 +113,10 @@ export interface CodexSessionInfo {
   end_time: string | null;
   total_tokens: number | null;
   is_ongoing: boolean;
+  /** true when session_meta.source.subagent is set (system-spawned: review, memory_consolidation) */
+  is_external_worker: boolean;
+  /** true when this session's id appears in another session's spawned_worker_ids */
+  is_inline_worker: boolean;
   spawned_worker_ids: string[];
   date_group: string;
 }

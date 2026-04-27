@@ -14,6 +14,7 @@ import {
   VscWatch,
   VscLightbulbEmpty,
   VscLinkExternal,
+  VscClose,
 } from "react-icons/vsc";
 import { MdOutlineGeneratingTokens, MdOutlineImage } from "react-icons/md";
 import { GoGitMerge } from "react-icons/go";
@@ -102,4 +103,8 @@ export function ThinkingIcon() {
 
 export function PopoutIcon() {
   return <VscLinkExternal />;
+}
+
+export function CloseIcon() {
+  return <VscClose />;
 }

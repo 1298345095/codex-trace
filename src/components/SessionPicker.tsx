@@ -150,6 +150,16 @@ export function SessionPicker({
                         +{s.spawned_worker_ids.length} workers
                       </span>
                     )}
+                    {s.is_external_worker && (
+                      <span className="picker__session-badge picker__session-badge--external-worker">
+                        worker
+                      </span>
+                    )}
+                    {s.is_inline_worker && (
+                      <span className="picker__session-badge picker__session-badge--inline-worker">
+                        inline worker
+                      </span>
+                    )}
                     <span className="picker__session-time">{formatExactTime(s.start_time)}</span>
                   </div>
                 </div>

@@ -203,4 +203,80 @@ describe("ToolCallItem", () => {
     );
     expect(container.querySelector(".tool-call__output code")).not.toBeInTheDocument();
   });
+
+  it("shows Open button for spawn_agent when workerSessionId is provided", () => {
+    const onOpenWorker = vi.fn();
+    render(
+      <ToolCallItem
+        tool={makeTool({
+          kind: "spawn_agent",
+          name: "spawn_agent",
+          command: null,
+          exit_code: null,
+        })}
+        expanded={false}
+        onToggle={vi.fn()}
+        workerSessionId="session-abc"
+        isWorkerOpen={false}
+        onOpenWorker={onOpenWorker}
+      />,
+    );
+    expect(screen.getByText("Open →")).toBeInTheDocument();
+  });
+
+  it("shows Close button for spawn_agent when worker panel is open", () => {
+    render(
+      <ToolCallItem
+        tool={makeTool({
+          kind: "spawn_agent",
+          name: "spawn_agent",
+          command: null,
+          exit_code: null,
+        })}
+        expanded={false}
+        onToggle={vi.fn()}
+        workerSessionId="session-abc"
+        isWorkerOpen={true}
+        onOpenWorker={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("← Close")).toBeInTheDocument();
+  });
+
+  it("calls onOpenWorker with session id when Open button clicked", () => {
+    const onOpenWorker = vi.fn();
+    render(
+      <ToolCallItem
+        tool={makeTool({
+          kind: "spawn_agent",
+          name: "spawn_agent",
+          command: null,
+          exit_code: null,
+        })}
+        expanded={false}
+        onToggle={vi.fn()}
+        workerSessionId="session-abc"
+        isWorkerOpen={false}
+        onOpenWorker={onOpenWorker}
+      />,
+    );
+    fireEvent.click(screen.getByText("Open →"));
+    expect(onOpenWorker).toHaveBeenCalledWith("session-abc");
+  });
+
+  it("does not show worker button when workerSessionId is absent", () => {
+    render(
+      <ToolCallItem
+        tool={makeTool({
+          kind: "spawn_agent",
+          name: "spawn_agent",
+          command: null,
+          exit_code: null,
+        })}
+        expanded={false}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Open →")).not.toBeInTheDocument();
+  });
 });

@@ -1,11 +1,9 @@
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useMemo } from "react";
 import type { CodexTurn } from "../../shared/types";
 import { ToolCallItem } from "./ToolCallItem";
 import { OngoingDots } from "./OngoingDots";
 import { BackIcon, CodexIcon } from "./Icons";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 import { shortModel, formatExactTime } from "../lib/format";
 import { getModelColor } from "../lib/theme";
 import { formatTokens, formatDuration } from "../../shared/format";
@@ -15,35 +13,26 @@ interface TurnDetailProps {
   expanded: Set<number>;
   onToggle: (i: number) => void;
   onBack: () => void;
-  onLoadWorker?: (sessionId: string) => void;
+  onOpenWorkerPanel?: (sessionId: string, nickname?: string) => void;
+  openWorkerSessionId?: string | null;
 }
 
-function MarkdownRenderer({ content }: { content: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code({ className, children }) {
-          const match = /language-(\w+)/.exec(className ?? "");
-          const lang = match ? match[1] : "";
-          const code = String(children).replace(/\n$/, "");
-          if (lang) {
-            return (
-              <SyntaxHighlighter language={lang} style={oneDark} PreTag="div">
-                {code}
-              </SyntaxHighlighter>
-            );
-          }
-          return <code className={className}>{children}</code>;
-        },
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  );
-}
-
-export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: TurnDetailProps) {
+export function TurnDetail({
+  turn,
+  expanded,
+  onToggle,
+  onBack,
+  onOpenWorkerPanel,
+  openWorkerSessionId,
+}: TurnDetailProps) {
+  // Map call_id → { new_thread_id, agent_nickname } for spawn_agent tool calls
+  const spawnMap = useMemo(() => {
+    const m = new Map<string, { sessionId: string; nickname: string }>();
+    for (const s of turn.collab_spawns) {
+      m.set(s.call_id, { sessionId: s.new_thread_id, nickname: s.agent_nickname });
+    }
+    return m;
+  }, [turn.collab_spawns]);
   const commentary = turn.agent_messages.filter(
     (m) => m.phase !== "final_answer" && !m.is_reasoning,
   );
@@ -140,44 +129,24 @@ export function TurnDetail({ turn, expanded, onToggle, onBack, onLoadWorker }: T
               <div className="turn-detail__section-label">
                 Tool calls ({turn.tool_calls.length})
               </div>
-              {turn.tool_calls.map((tool, i) => (
-                <ToolCallItem
-                  key={tool.call_id || i}
-                  tool={tool}
-                  expanded={expanded.has(i)}
-                  onToggle={() => onToggle(i)}
-                />
-              ))}
-            </div>
-          )}
-
-          {turn.collab_spawns.length > 0 && (
-            <div className="turn-detail__section turn-detail__section--collab">
-              <div className="turn-detail__section-label" style={{ color: "var(--collab-badge)" }}>
-                Spawned workers ({turn.collab_spawns.length})
-              </div>
-              {turn.collab_spawns.map((spawn) => (
-                <div key={spawn.call_id} className="turn-detail__collab-spawn">
-                  <div className="turn-detail__collab-header">
-                    <span className="turn-detail__collab-nick">{spawn.agent_nickname}</span>
-                    {spawn.model && (
-                      <span className="turn-detail__collab-model">{spawn.model}</span>
-                    )}
-                    {onLoadWorker && (
-                      <button
-                        className="turn-detail__collab-btn"
-                        onClick={() => onLoadWorker(spawn.new_thread_id)}
-                        title="Open worker session"
-                      >
-                        Open ↗
-                      </button>
-                    )}
-                  </div>
-                  {spawn.prompt_preview && (
-                    <pre className="turn-detail__collab-prompt">{spawn.prompt_preview}</pre>
-                  )}
-                </div>
-              ))}
+              {turn.tool_calls.map((tool, i) => {
+                const spawn = tool.kind === "spawn_agent" ? spawnMap.get(tool.call_id) : undefined;
+                return (
+                  <ToolCallItem
+                    key={tool.call_id || i}
+                    tool={tool}
+                    expanded={expanded.has(i)}
+                    onToggle={() => onToggle(i)}
+                    workerSessionId={spawn?.sessionId}
+                    isWorkerOpen={!!spawn && spawn.sessionId === openWorkerSessionId}
+                    onOpenWorker={
+                      onOpenWorkerPanel && spawn
+                        ? (id) => onOpenWorkerPanel(id, spawn.nickname)
+                        : undefined
+                    }
+                  />
+                );
+              })}
             </div>
           )}
 

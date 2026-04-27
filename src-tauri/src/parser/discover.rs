@@ -22,6 +22,10 @@ pub struct CodexSessionInfo {
     pub end_time: Option<String>,
     pub total_tokens: Option<u64>,
     pub is_ongoing: bool,
+    /// true when session_meta.source.subagent is set (system-spawned: review, memory_consolidation)
+    pub is_external_worker: bool,
+    /// true when this session's id appears in another session's spawned_worker_ids (inline collab worker)
+    pub is_inline_worker: bool,
     pub spawned_worker_ids: Vec<String>,
     /// "YYYY/MM/DD" derived from the file path
     pub date_group: String,
@@ -49,6 +53,18 @@ pub fn discover_sessions(sessions_dir: &Path) -> Result<Vec<CodexSessionInfo>, S
             .unwrap_or("");
         fb.cmp(fa)
     });
+
+    // Second pass: mark inline workers — sessions whose id appears in any parent's spawned_worker_ids.
+    use std::collections::HashSet;
+    let inline_worker_ids: HashSet<String> = infos
+        .iter()
+        .flat_map(|s| s.spawned_worker_ids.iter().cloned())
+        .collect();
+    for info in &mut infos {
+        if inline_worker_ids.contains(&info.id) {
+            info.is_inline_worker = true;
+        }
+    }
 
     Ok(infos)
 }
@@ -106,42 +122,56 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
     let payload = &entry.payload;
     let raw = &entry.raw;
 
-    let (id, start_time, cwd, originator, cli_version, git_branch, _instructions) =
-        match entry.entry_type.as_str() {
-            "session_meta" => {
-                let id = str_field(payload, "id");
-                let start_time = str_field(payload, "timestamp");
-                let cwd = opt_str(payload, "cwd");
-                let originator = opt_str(payload, "originator");
-                let cli_version = opt_str(payload, "cli_version");
-                let git_branch = payload
-                    .get("git")
-                    .and_then(|g| g.get("branch"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let instructions: Option<String> = None; // not needed for picker
-                (
-                    id,
-                    start_time,
-                    cwd,
-                    originator,
-                    cli_version,
-                    git_branch,
-                    instructions,
-                )
-            }
-            "session_meta_root" => {
-                let id = str_field(raw, "id");
-                let start_time = str_field(raw, "timestamp");
-                let git_branch = raw
-                    .get("git")
-                    .and_then(|g| g.get("branch"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                (id, start_time, None, None, None, git_branch, None)
-            }
-            _ => return None,
-        };
+    let (
+        id,
+        start_time,
+        cwd,
+        originator,
+        cli_version,
+        git_branch,
+        _instructions,
+        is_external_worker,
+    ) = match entry.entry_type.as_str() {
+        "session_meta" => {
+            let id = str_field(payload, "id");
+            let start_time = str_field(payload, "timestamp");
+            let cwd = opt_str(payload, "cwd");
+            let originator = opt_str(payload, "originator");
+            let cli_version = opt_str(payload, "cli_version");
+            let git_branch = payload
+                .get("git")
+                .and_then(|g| g.get("branch"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let instructions: Option<String> = None; // not needed for picker
+                                                     // source.subagent present ⟹ this is a system-spawned external worker
+            let is_external_worker = payload
+                .get("source")
+                .and_then(|s| s.get("subagent"))
+                .is_some();
+            (
+                id,
+                start_time,
+                cwd,
+                originator,
+                cli_version,
+                git_branch,
+                instructions,
+                is_external_worker,
+            )
+        }
+        "session_meta_root" => {
+            let id = str_field(raw, "id");
+            let start_time = str_field(raw, "timestamp");
+            let git_branch = raw
+                .get("git")
+                .and_then(|g| g.get("branch"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            (id, start_time, None, None, None, git_branch, None, false)
+        }
+        _ => return None,
+    };
 
     if id.is_empty() {
         return None;
@@ -292,6 +322,8 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         end_time,
         total_tokens,
         is_ongoing,
+        is_external_worker,
+        is_inline_worker: false, // set by discover_sessions second pass
         spawned_worker_ids,
         date_group,
     })

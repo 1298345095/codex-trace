@@ -18,6 +18,8 @@ function makeSession(overrides: Partial<CodexSessionInfo> = {}): CodexSessionInf
     end_time: null,
     total_tokens: null,
     is_ongoing: false,
+    is_external_worker: false,
+    is_inline_worker: false,
     spawned_worker_ids: [],
     date_group: "2026/04/26",
     ...overrides,
@@ -167,5 +169,73 @@ describe("SidebarTree", () => {
     expect(screen.getByText("2026/04/26")).toBeInTheDocument();
     expect(screen.getByText("Session A")).toBeInTheDocument();
     expect(screen.getByText("Session B")).toBeInTheDocument();
+  });
+
+  it("hides inline workers from the top-level list", () => {
+    const worker = makeSession({
+      id: "worker1",
+      path: "/sessions/2026/04/26/rollout-worker.jsonl",
+      thread_name: "Worker Session",
+      is_inline_worker: true,
+    });
+    const parent = makeSession({
+      id: "parent1",
+      path: "/sessions/2026/04/26/rollout-parent.jsonl",
+      thread_name: "Parent Session",
+      spawned_worker_ids: ["worker1"],
+    });
+    render(
+      <SidebarTree
+        sessions={[parent, worker]}
+        selectedPath={null}
+        collapsedDates={new Set()}
+        onSelectSession={vi.fn()}
+        onToggleDate={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Parent Session")).toBeInTheDocument();
+    expect(screen.queryByText("Worker Session")).not.toBeInTheDocument();
+  });
+
+  it("shows inline workers nested under parent when toggle is clicked", () => {
+    const worker = makeSession({
+      id: "worker1",
+      path: "/sessions/2026/04/26/rollout-worker.jsonl",
+      thread_name: "Worker Session",
+      is_inline_worker: true,
+    });
+    const parent = makeSession({
+      id: "parent1",
+      path: "/sessions/2026/04/26/rollout-parent.jsonl",
+      thread_name: "Parent Session",
+      spawned_worker_ids: ["worker1"],
+    });
+    render(
+      <SidebarTree
+        sessions={[parent, worker]}
+        selectedPath={null}
+        collapsedDates={new Set()}
+        onSelectSession={vi.fn()}
+        onToggleDate={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText(/1 workers/));
+    expect(screen.getByText("Worker Session")).toBeInTheDocument();
+    expect(
+      screen.getByText("Worker Session").closest(".sidebar-tree__session--child"),
+    ).toBeTruthy();
+  });
+
+  it("shows worker badge on external worker sessions", () => {
+    render(
+      <SidebarTree
+        sessions={[makeSession({ is_external_worker: true, thread_name: "Review Session" })]}
+        selectedPath={null}
+        collapsedDates={new Set()}
+        onSelectSession={vi.fn()}
+        onToggleDate={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("worker")).toBeInTheDocument();
   });
 });
