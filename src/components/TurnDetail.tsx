@@ -61,25 +61,25 @@ export function TurnDetail({
         {model && <span style={{ color: modelColor, fontWeight: 600, fontSize: 12 }}>{model}</span>}
         {turn.status === "ongoing" && <OngoingDots count={3} />}
         {(contextLeftPercent !== null || metaParts.length > 0) && (
-          <span className="message-detail__meta">
+          <div className="message-detail__meta">
             {contextLeftPercent !== null && contextUsedPercent !== null && (
-              <span className="message-detail__context info-bar__context" title={contextTitle}>
+              <div className="message-detail__context info-bar__context" title={contextTitle}>
                 <span>ctx {contextLeftPercent}% left</span>
-                <span className="info-bar__context-bar">
-                  <span
+                <div className="info-bar__context-bar">
+                  <div
                     className="info-bar__context-fill"
                     style={{
                       width: `${contextUsedPercent}%`,
                       backgroundColor: getContextColor(contextUsedPercent),
                     }}
                   />
-                </span>
-              </span>
+                </div>
+              </div>
             )}
             {metaParts.length > 0 && (
               <span className="message-detail__meta-text">{metaParts.join(" · ")}</span>
             )}
-          </span>
+          </div>
         )}
       </div>
 
