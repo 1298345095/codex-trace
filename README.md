@@ -132,16 +132,6 @@ npm run check        # tsc + oxlint + oxfmt + cargo clippy/fmt/test
 
 Run checks before submitting a pull request.
 
-## Related search terms
-
-Codex Trace may also be useful if you are looking for an OpenAI Codex CLI log viewer, Codex CLI JSONL viewer, Codex session viewer, Codex CLI history browser, Codex CLI message search tool, Codex CLI tool call viewer, Codex CLI token usage viewer, Codex CLI collaboration chain viewer, or a local Codex debugging tool.
-
-## Recommended GitHub topics
-
-Add these topics to the repository to improve discoverability in GitHub search:
-
-`codex`, `codex-cli`, `openai-codex`, `openai`, `jsonl`, `session-viewer`, `log-viewer`, `developer-tools`, `tauri`, `react`, `rust`, `desktop-app`, `web-ui`, `ai-tools`, `llm-tools`, `tool-calls`
-
 ## Contributing
 
 Bug reports, feature requests, and pull requests are welcome. Run `npm run check` before submitting — it covers TypeScript, linting, formatting, Clippy, Rust formatting, and Rust tests.
