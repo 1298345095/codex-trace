@@ -20,7 +20,10 @@ Use Codex Trace when you want to:
 - Review token usage from previous Codex CLI sessions
 - Monitor active Codex CLI sessions in real time
 - Debug long-running Codex CLI workflows from a desktop or browser interface
+- Support and build a personal AI harness platform such as [DovePaw Lite](https://github.com/PixelPaw-Labs/DovePaw-Lite)
 
+> Codex Trace is also used to support and build [**DovePaw Lite**](https://github.com/PixelPaw-Labs/DovePaw-Lite), a personal AI harness platform for orchestrating local agents.
+>
 > Claude Code user? See [claude-code-trace](https://github.com/delexw/claude-code-trace) instead.
 
 ![Codex Trace desktop app showing OpenAI Codex CLI JSONL session logs, turns, tool calls, token counts, and collaboration chains](example.png)
@@ -43,6 +46,8 @@ Use Codex Trace when you want to:
 Codex CLI stores local session history as JSONL files. Those files are useful for debugging and reviewing AI coding sessions, but they are difficult to read directly. Codex Trace turns Codex CLI logs into an interactive session viewer so you can search conversations, inspect tool usage, review token counts, follow collaboration chains, and debug Codex workflows faster.
 
 Unlike general observability platforms, Codex Trace focuses on local Codex CLI session logs from `~/.codex/sessions/`. It does not require sending traces to an external service.
+
+Codex Trace is especially useful when building personal AI harnesses and local agent platforms. It helps inspect Codex CLI sessions, understand tool usage, follow collaboration chains, and debug the workflows that power projects like [DovePaw Lite](https://github.com/PixelPaw-Labs/DovePaw-Lite).
 
 ## Install
 
