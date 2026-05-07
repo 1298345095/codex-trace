@@ -267,6 +267,21 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                                     .and_then(|v| v.as_str())
                                     .map(|s| s.to_string())
                             });
+                        // Codex v0.128.0: task_complete may carry prompt_tokens/completion_tokens/total_tokens.
+                        // Use as fallback when no token_count event was seen.
+                        if total_tokens.is_none() {
+                            total_tokens = payload
+                                .get("total_tokens")
+                                .and_then(|v| v.as_u64())
+                                .or_else(|| {
+                                    let p =
+                                        payload.get("prompt_tokens").and_then(|v| v.as_u64())?;
+                                    let c = payload
+                                        .get("completion_tokens")
+                                        .and_then(|v| v.as_u64())?;
+                                    Some(p + c)
+                                });
+                        }
                     }
                     "turn_aborted" => {
                         is_ongoing = false;
@@ -664,5 +679,30 @@ mod tests {
             .find(|s| s.id == "endmarker-session")
             .unwrap();
         assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn reads_total_tokens_from_task_complete_v0128() {
+        // Codex v0.128.0 adds prompt_tokens/completion_tokens/total_tokens to task_complete.
+        // The discover scanner should use these as a fallback when no token_count event exists.
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/30");
+        std::fs::create_dir_all(&day_dir).unwrap();
+        let session_path = day_dir.join("rollout-2026-04-30T10-00-00-s1.jsonl");
+        std::fs::write(
+            &session_path,
+            [
+                r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"s1","timestamp":"2026-04-30T10:00:00Z"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:10Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007210.0,"prompt_tokens":1500,"completion_tokens":300,"total_tokens":1800}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let session = sessions.iter().find(|s| s.id == "s1").unwrap();
+
+        assert_eq!(session.total_tokens, Some(1800));
     }
 }

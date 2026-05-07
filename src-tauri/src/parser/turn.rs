@@ -307,6 +307,28 @@ fn handle_event_msg(
                     .map(|v| v as u64)
                     .or_else(|| entry.timestamp.as_deref().and_then(parse_timestamp_secs));
                 turn.duration_ms = payload.get("duration_ms").and_then(|v| v.as_u64());
+                // Codex v0.128.0 adds prompt_tokens/completion_tokens/total_tokens to task_complete.
+                // Use these only when no richer token_count event has already populated the turn.
+                if turn.total_tokens.is_none() {
+                    let prompt_tokens = payload.get("prompt_tokens").and_then(|v| v.as_u64());
+                    let completion_tokens =
+                        payload.get("completion_tokens").and_then(|v| v.as_u64());
+                    let total = payload
+                        .get("total_tokens")
+                        .and_then(|v| v.as_u64())
+                        .or_else(|| prompt_tokens.zip(completion_tokens).map(|(p, c)| p + c));
+                    if let Some(total_tokens) = total {
+                        turn.total_tokens = Some(TokenInfo {
+                            input_tokens: prompt_tokens.unwrap_or(0),
+                            cached_input_tokens: 0,
+                            output_tokens: completion_tokens.unwrap_or(0),
+                            reasoning_output_tokens: 0,
+                            total_tokens,
+                            context_window_tokens: None,
+                            model_context_window: 0,
+                        });
+                    }
+                }
             }
         }
 
@@ -936,5 +958,28 @@ mod tests {
         assert_eq!(turns.len(), 1);
         // The ASCII-escaped Unicode must be decoded to its actual UTF-8 string value
         assert_eq!(turns[0].user_message.as_deref(), Some("\u{4e2d}\u{6587}"));
+    }
+
+    #[test]
+    fn reads_token_usage_from_task_complete_v0128() {
+        // Codex v0.128.0 adds prompt_tokens/completion_tokens/total_tokens to task_complete.
+        // These should populate turn.total_tokens when no prior token_count event exists.
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"s1","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:10Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007210.0,"prompt_tokens":1500,"completion_tokens":300,"total_tokens":1800}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        let tokens = turns[0]
+            .total_tokens
+            .as_ref()
+            .expect("token info from task_complete");
+        assert_eq!(tokens.input_tokens, 1500);
+        assert_eq!(tokens.output_tokens, 300);
+        assert_eq!(tokens.total_tokens, 1800);
+        assert_eq!(tokens.cached_input_tokens, 0);
+        assert_eq!(tokens.context_window_tokens, None);
     }
 }
