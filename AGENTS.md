@@ -65,3 +65,7 @@ Tool calls classified by **end event type**, not function name.
 - Frontend dev: 1420
 - Backend HTTP: 11424
 - Docker: 1422
+
+### Transport boundary
+
+codex-trace reads session data exclusively from JSONL files on disk — it does **not** connect to the Codex app-server Unix socket or any live process. Live-tailing is implemented via filesystem watching (`notify` crate) on the `~/.codex/sessions/` directory tree. Changes to Codex's app-server transport layer (e.g. the WebSocket upgrade in v0.128.0, PR #19244) have no impact on codex-trace.

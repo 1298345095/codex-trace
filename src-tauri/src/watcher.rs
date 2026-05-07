@@ -264,4 +264,21 @@ mod tests {
         let other_file = Path::new("/tmp/other/rollout-worker.jsonl");
         assert!(!is_related_session_path(other_file, session_file));
     }
+
+    #[test]
+    fn related_session_path_ignores_socket_and_non_jsonl_paths() {
+        // Transport boundary guard: the watcher reacts only to .jsonl file
+        // events, never to socket or other IPC paths. This confirms codex-trace
+        // reads sessions from disk rather than connecting to any live process
+        // socket (e.g. the Codex app-server Unix socket upgraded in v0.128.0).
+        let session_file = Path::new("/tmp/sessions/rollout-parent.jsonl");
+        assert!(!is_related_session_path(
+            Path::new("/tmp/sessions/codex.sock"),
+            session_file
+        ));
+        assert!(!is_related_session_path(
+            Path::new("/tmp/sessions/codex.pid"),
+            session_file
+        ));
+    }
 }
