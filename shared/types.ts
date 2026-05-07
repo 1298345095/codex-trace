@@ -98,6 +98,7 @@ export interface CodexSession {
   total_tokens: TokenInfo | null;
   thread_name: string | null;
   spawned_worker_ids: string[];
+  ai_title: string | null;
   path: string;
 }
 
@@ -123,6 +124,7 @@ export interface CodexSessionInfo {
   worker_role: string | null;
   spawned_worker_ids: string[];
   date_group: string;
+  ai_title: string | null;
 }
 
 export interface SettingsResponse {
