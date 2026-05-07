@@ -33,6 +33,7 @@ pub struct CodexSession {
     pub thread_name: Option<String>,
     pub spawned_worker_ids: Vec<String>,
     pub path: String,
+    pub ai_title: Option<String>,
 }
 
 /// Parse a Codex JSONL session file into a CodexSession.
@@ -75,6 +76,7 @@ fn parse_session_inner(
         thread_name: None,
         spawned_worker_ids: Vec::new(),
         path: path.to_string_lossy().to_string(),
+        ai_title: None,
     };
 
     // Parse session_meta from first matching entry
@@ -91,6 +93,10 @@ fn parse_session_inner(
             _ => {}
         }
     }
+
+    // Check for explicit session_end marker (Codex v0.128.0+).
+    // When present the session is definitively closed regardless of file freshness.
+    let has_session_end = entries.iter().any(|e| e.entry_type == "session_end");
 
     // Build turns from remaining entries
     let mut turns = build_turns(&entries);
@@ -111,6 +117,8 @@ fn parse_session_inner(
     // modified within 60 seconds (same threshold as source repo). Sessions older
     // than that have no live CLI writing to them — task_complete was simply missed
     // (crash, kill, older CLI that never emitted the event).
+    // A session_end marker (v0.128.0+) overrides both heuristics: the session
+    // is definitively closed even if the file is still fresh.
     let turn_ongoing = turns
         .last()
         .map(|t| t.status == super::turn::TurnStatus::Ongoing)
@@ -124,11 +132,12 @@ fn parse_session_inner(
                 .unwrap_or(true)
         })
         .unwrap_or(true);
-    let is_ongoing = turn_ongoing && file_fresh;
+    let is_ongoing = !has_session_end && turn_ongoing && file_fresh;
 
-    // If the file is stale and the last turn never got a completion event,
-    // mark it as Aborted so the UI doesn't show an ongoing indicator.
-    if turn_ongoing && !file_fresh {
+    // If the file is stale (or session_end present) and the last turn never got
+    // a completion event, mark it as Aborted so the UI doesn't show an ongoing
+    // indicator.
+    if turn_ongoing && (!file_fresh || has_session_end) {
         if let Some(last) = turns.last_mut() {
             last.status = TurnStatus::Aborted;
         }
@@ -237,6 +246,12 @@ fn parse_session_meta_new(session: &mut CodexSession, payload: &Value, _raw: &Va
     session.originator = opt_str(payload, "originator");
     session.cli_version = opt_str(payload, "cli_version");
     session.model_provider = opt_str(payload, "model_provider");
+    // ai-title is an optional field added in Codex v0.128.0 for external agent sessions
+    session.ai_title = payload
+        .get("ai-title")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
 
     if let Some(git) = payload.get("git") {
         session.git = Some(GitInfo {
@@ -414,5 +429,90 @@ mod tests {
             nested_worker_session.turns[0].tool_calls[0].output,
             Some("nested output".to_string())
         );
+    }
+
+    #[test]
+    fn parse_session_reads_ai_title_from_session_meta() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("rollout-2026-04-30T10-00-00-ext.jsonl");
+        std::fs::write(
+            &path,
+            [
+                r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"ext-session","timestamp":"2026-04-30T10:00:00Z","ai-title":"Fix the login bug"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:02Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007202.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let session = parse_session(&path).unwrap();
+        assert_eq!(session.ai_title.as_deref(), Some("Fix the login bug"));
+        assert_eq!(session.id, "ext-session");
+    }
+
+    #[test]
+    fn parse_session_end_marker_closes_session() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("rollout-2026-04-30T10-01-00-ended.jsonl");
+        std::fs::write(
+            &path,
+            [
+                r#"{"timestamp":"2026-04-30T10:01:00Z","type":"session_meta","payload":{"id":"ended-session","timestamp":"2026-04-30T10:01:00Z"}}"#,
+                r#"{"timestamp":"2026-04-30T10:01:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:01:02Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007262.0}}"#,
+                r#"{"timestamp":"2026-04-30T10:01:03Z","type":"session_end","payload":{}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let session = parse_session(&path).unwrap();
+        assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn parse_session_end_marker_overrides_ongoing_turn() {
+        let tmp = tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join("rollout-2026-04-30T10-02-00-endmarker.jsonl");
+        std::fs::write(
+            &path,
+            [
+                r#"{"timestamp":"2026-04-30T10:02:00Z","type":"session_meta","payload":{"id":"endmarker-session","timestamp":"2026-04-30T10:02:00Z"}}"#,
+                r#"{"timestamp":"2026-04-30T10:02:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:02:02Z","type":"session_end","payload":{}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let session = parse_session(&path).unwrap();
+        // session_end overrides the ongoing turn — session must not appear live
+        assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn parse_session_unknown_record_types_are_skipped() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("rollout-2026-04-30T10-03-00-unknown.jsonl");
+        std::fs::write(
+            &path,
+            [
+                r#"{"timestamp":"2026-04-30T10:03:00Z","type":"session_meta","payload":{"id":"unknown-types-session","timestamp":"2026-04-30T10:03:00Z"}}"#,
+                r#"{"timestamp":"2026-04-30T10:03:01Z","type":"future_record_type_v999","payload":{"data":"some future data"}}"#,
+                r#"{"timestamp":"2026-04-30T10:03:02Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:03:03Z","type":"another_unknown_type","payload":{}}"#,
+                r#"{"timestamp":"2026-04-30T10:03:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007384.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let session = parse_session(&path).unwrap();
+        assert_eq!(session.id, "unknown-types-session");
+        assert_eq!(session.turns.len(), 1);
+        assert!(!session.is_ongoing);
     }
 }
