@@ -116,4 +116,33 @@ mod tests {
     fn parse_timestamp() {
         assert!(parse_timestamp_secs("2026-04-25T10:00:00Z").is_some());
     }
+
+    #[test]
+    fn log_db_log_writer_refactor_does_not_affect_jsonl_session_parser() {
+        // Codex v0.128.0 PRs #19234/#19959 refactored the internal log DB into a
+        // LogWriter interface and fixed its batch flush timing. That subsystem is a
+        // SQLite-backed telemetry store — entirely separate from the JSONL session
+        // files at ~/.codex/sessions/ that codex-trace reads. Verify all four
+        // standard entry types produced by a v0.128.0 session parse correctly.
+        let lines = [
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"v0128-session","timestamp":"2026-04-30T10:00:00Z","cwd":"/tmp","cli_version":"0.128.0","model_provider":"openai"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":"Hello"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:03Z","type":"turn_context","payload":{"model":"gpt-5.4","cwd":"/tmp"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007204.0}}"#,
+        ];
+        let expected_types = [
+            "session_meta",
+            "event_msg",
+            "response_item",
+            "turn_context",
+            "event_msg",
+        ];
+        for (line, expected) in lines.iter().zip(expected_types.iter()) {
+            let entry = RawEntry::parse(line).expect("parse failed");
+            assert_eq!(entry.entry_type, *expected, "wrong type for: {line}");
+        }
+        let meta = RawEntry::parse(lines[0]).unwrap();
+        assert_eq!(meta.payload["cli_version"], "0.128.0");
+    }
 }
