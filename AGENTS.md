@@ -65,3 +65,13 @@ Tool calls classified by **end event type**, not function name.
 - Frontend dev: 1420
 - Backend HTTP: 11424
 - Docker: 1422
+
+### Codex CLI flags boundary
+
+codex-trace is a **read-only viewer** — it reads JSONL session files written by the Codex CLI into `~/.codex/sessions/` and never invokes the Codex CLI binary at runtime.
+
+Codex CLI invocation flags such as `--full-auto`, `--sandbox-profile`, and `--permission-profile` are therefore **not used by codex-trace** at all. These flags may appear as recorded metadata inside session files (e.g. as fields in `session_meta` payloads), where codex-trace parses them as structured data only — they are never passed to a child process.
+
+**Consequence for Codex v0.128.0 `--full-auto` deprecation (PR #20133):** codex-trace is not affected. The flag is neither invoked nor referenced in any source file. No migration is required.
+
+If a future change ever causes codex-trace to spawn a `codex` process, the `codex_cli_flags_read_as_jsonl_data_not_invoked` test in `src-tauri/src/parser/entry.rs` documents this boundary and must be revisited before merging.
