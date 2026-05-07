@@ -32,6 +32,8 @@ pub struct CodexSessionInfo {
     pub spawned_worker_ids: Vec<String>,
     /// "YYYY/MM/DD" derived from the file path
     pub date_group: String,
+    /// Optional AI-generated title from external agent sessions (Codex v0.128.0+)
+    pub ai_title: Option<String>,
 }
 
 /// Scan a sessions directory recursively for all rollout-*.jsonl files.
@@ -136,6 +138,7 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         is_external_worker,
         worker_nickname,
         worker_role,
+        ai_title,
     ) = match entry.entry_type.as_str() {
         "session_meta" => {
             let id = str_field(payload, "id");
@@ -155,6 +158,11 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 .and_then(|s| s.get("subagent"))
                 .is_some();
             let (worker_nickname, worker_role) = worker_metadata(payload);
+            let ai_title = payload
+                .get("ai-title")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
             (
                 id,
                 start_time,
@@ -166,6 +174,7 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 is_external_worker,
                 worker_nickname,
                 worker_role,
+                ai_title,
             )
         }
         "session_meta_root" => {
@@ -177,7 +186,7 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
             (
-                id, start_time, None, None, None, git_branch, None, false, None, None,
+                id, start_time, None, None, None, git_branch, None, false, None, None, None,
             )
         }
         _ => return None,
@@ -197,6 +206,7 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
     let mut pending_spawn_call_ids: std::collections::HashSet<String> =
         std::collections::HashSet::new();
     let mut is_ongoing = true;
+    let mut has_session_end = false;
 
     for line in lines {
         if line.trim().is_empty() {
@@ -209,6 +219,16 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
 
         let t = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
         match t {
+            "session_end" => {
+                has_session_end = true;
+                is_ongoing = false;
+                if end_time.is_none() {
+                    end_time = v
+                        .get("timestamp")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                }
+            }
             "event_msg" => {
                 let pt = v
                     .get("payload")
@@ -218,12 +238,16 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                 match pt {
                     "task_started" => {
                         turn_count += 1;
-                        is_ongoing = true;
+                        if !has_session_end {
+                            is_ongoing = true;
+                        }
                         end_time = None;
                     }
                     "user_message" if turn_count == 0 => {
                         turn_count += 1;
-                        is_ongoing = true;
+                        if !has_session_end {
+                            is_ongoing = true;
+                        }
                         end_time = None;
                     }
                     "task_complete" => {
@@ -243,6 +267,21 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                                     .and_then(|v| v.as_str())
                                     .map(|s| s.to_string())
                             });
+                        // Codex v0.128.0: task_complete may carry prompt_tokens/completion_tokens/total_tokens.
+                        // Use as fallback when no token_count event was seen.
+                        if total_tokens.is_none() {
+                            total_tokens = payload
+                                .get("total_tokens")
+                                .and_then(|v| v.as_u64())
+                                .or_else(|| {
+                                    let p =
+                                        payload.get("prompt_tokens").and_then(|v| v.as_u64())?;
+                                    let c = payload
+                                        .get("completion_tokens")
+                                        .and_then(|v| v.as_u64())?;
+                                    Some(p + c)
+                                });
+                        }
                     }
                     "turn_aborted" => {
                         is_ongoing = false;
@@ -335,7 +374,7 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
     // Validate with file mtime: sessions last modified more than 60 seconds ago
     // cannot be actively processing a turn, regardless of missing task_complete events.
     // Many older CLI versions didn't emit task_complete, causing false positives otherwise.
-    if is_ongoing {
+    if is_ongoing && !has_session_end {
         const ONGOING_THRESHOLD_SECS: u64 = 60;
         if let Ok(metadata) = fs::metadata(path) {
             if let Ok(modified) = metadata.modified() {
@@ -370,6 +409,7 @@ fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         worker_role,
         spawned_worker_ids,
         date_group,
+        ai_title,
     })
 }
 
@@ -563,5 +603,106 @@ mod tests {
         assert_eq!(session.turn_count, 2);
         assert!(!session.is_ongoing);
         assert!(session.end_time.is_some());
+    }
+
+    #[test]
+    fn discover_sessions_reads_ai_title() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/30");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let session_path = day_dir.join("rollout-2026-04-30T10-00-00-aititle.jsonl");
+        std::fs::write(
+            &session_path,
+            [
+                r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"aititle-session","timestamp":"2026-04-30T10:00:00Z","ai-title":"Refactor the auth module"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:02Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007202.0}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let session = sessions.iter().find(|s| s.id == "aititle-session").unwrap();
+        assert_eq!(
+            session.ai_title.as_deref(),
+            Some("Refactor the auth module")
+        );
+    }
+
+    #[test]
+    fn discover_sessions_session_end_marks_not_ongoing() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/30");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let session_path = day_dir.join("rollout-2026-04-30T10-01-00-ended.jsonl");
+        std::fs::write(
+            &session_path,
+            [
+                r#"{"timestamp":"2026-04-30T10:01:00Z","type":"session_meta","payload":{"id":"ended-session","timestamp":"2026-04-30T10:01:00Z"}}"#,
+                r#"{"timestamp":"2026-04-30T10:01:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:01:02Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007262.0}}"#,
+                r#"{"timestamp":"2026-04-30T10:01:03Z","type":"session_end","payload":{}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let session = sessions.iter().find(|s| s.id == "ended-session").unwrap();
+        assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn discover_sessions_session_end_overrides_ongoing_turn() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/30");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let session_path = day_dir.join("rollout-2026-04-30T10-02-00-endmarker.jsonl");
+        std::fs::write(
+            &session_path,
+            [
+                r#"{"timestamp":"2026-04-30T10:02:00Z","type":"session_meta","payload":{"id":"endmarker-session","timestamp":"2026-04-30T10:02:00Z"}}"#,
+                r#"{"timestamp":"2026-04-30T10:02:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:02:02Z","type":"session_end","payload":{}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let session = sessions
+            .iter()
+            .find(|s| s.id == "endmarker-session")
+            .unwrap();
+        assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn reads_total_tokens_from_task_complete_v0128() {
+        // Codex v0.128.0 adds prompt_tokens/completion_tokens/total_tokens to task_complete.
+        // The discover scanner should use these as a fallback when no token_count event exists.
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/04/30");
+        std::fs::create_dir_all(&day_dir).unwrap();
+        let session_path = day_dir.join("rollout-2026-04-30T10-00-00-s1.jsonl");
+        std::fs::write(
+            &session_path,
+            [
+                r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"s1","timestamp":"2026-04-30T10:00:00Z"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-04-30T10:00:10Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007210.0,"prompt_tokens":1500,"completion_tokens":300,"total_tokens":1800}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let session = sessions.iter().find(|s| s.id == "s1").unwrap();
+
+        assert_eq!(session.total_tokens, Some(1800));
     }
 }
