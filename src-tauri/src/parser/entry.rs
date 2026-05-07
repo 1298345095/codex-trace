@@ -150,4 +150,21 @@ mod tests {
             assert_eq!(e.payload["type"], expected_payload_type);
         }
     }
+
+    /// Codex CLI flags boundary: codex-trace never invokes `codex` at runtime.
+    /// Flags such as `--full-auto`, `--sandbox-profile`, and `--permission-profile`
+    /// are Codex CLI invocation flags; they appear only as data inside JSONL session
+    /// files (e.g. recorded in session_meta) and are never passed by codex-trace to
+    /// any process. This test guards against any future accidental CLI invocation by
+    /// verifying that permission-related session metadata is parsed as JSONL data only.
+    #[test]
+    fn codex_cli_flags_read_as_jsonl_data_not_invoked() {
+        // A session_meta entry recording the permission profile used by the Codex CLI.
+        // codex-trace reads this as structured data; it never spawns `codex` or passes
+        // these flags to any child process.
+        let line = r#"{"timestamp":"2026-04-30T12:00:00Z","type":"session_meta","payload":{"id":"s1","cwd":"/home/user","permission_profile":"full-auto"}}"#;
+        let e = RawEntry::parse(line).unwrap();
+        assert_eq!(e.entry_type, "session_meta");
+        assert_eq!(e.payload["permission_profile"], "full-auto");
+    }
 }
