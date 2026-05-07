@@ -93,12 +93,6 @@ Or with Docker Compose:
 docker compose up --build
 ```
 
-## Compatibility
-
-Codex Trace reads JSONL session files from `~/.codex/sessions/` and does not interact with the Codex CLI itself at runtime. This means many internal Codex CLI changes do not affect Codex Trace.
-
-In particular, the Codex v0.128.0 `LogWriter` refactor (PRs #19234 and #19959) does not affect Codex Trace. The `log DB` / `LogWriter` subsystem is a SQLite-backed internal telemetry store — it is entirely separate from the JSONL session files that Codex Trace reads. The session file format, path (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`), and naming convention are unchanged.
-
 ## Session format
 
 Codex Trace reads session files from this default path:
