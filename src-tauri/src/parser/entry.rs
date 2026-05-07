@@ -119,4 +119,35 @@ mod tests {
         assert_eq!(e.entry_type, "response_item");
         assert_eq!(e.payload["type"], "function_call");
     }
+
+    // `response_item` is a JSONL log entry type written by the Codex CLI into session
+    // files. It is entirely unrelated to the `codex responses` CLI subcommand that was
+    // removed in Codex v0.128.0 (PR #19640). This test guards against that confusion
+    // and ensures all expected response_item payload types continue to parse correctly.
+    #[test]
+    fn response_item_payload_types_parsed_from_jsonl_not_cli_subcommand() {
+        let cases = [
+            (
+                r#"{"timestamp":"2026-04-25T10:00:00Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"c1"}}"#,
+                "function_call",
+            ),
+            (
+                r#"{"timestamp":"2026-04-25T10:00:01Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}"#,
+                "function_call_output",
+            ),
+            (
+                r#"{"timestamp":"2026-04-25T10:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":"hello"}}"#,
+                "message",
+            ),
+            (
+                r#"{"timestamp":"2026-04-25T10:00:03Z","type":"response_item","payload":{"type":"reasoning","encrypted_content":"..."}}"#,
+                "reasoning",
+            ),
+        ];
+        for (line, expected_payload_type) in cases {
+            let e = RawEntry::parse(line).unwrap();
+            assert_eq!(e.entry_type, "response_item");
+            assert_eq!(e.payload["type"], expected_payload_type);
+        }
+    }
 }

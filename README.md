@@ -137,6 +137,12 @@ npm run check        # tsc + oxlint + oxfmt + cargo clippy/fmt/test
 
 Run checks before submitting a pull request.
 
+## Compatibility
+
+Codex Trace reads session data exclusively from local JSONL files written to `~/.codex/sessions/` by the Codex CLI. It never invokes any Codex CLI subcommand at runtime.
+
+This means Codex CLI subcommand removals do not affect Codex Trace. For example, the removal of the `codex responses` subcommand in Codex v0.128.0 has no impact — Codex Trace never called that command and does not depend on its output format.
+
 ## Contributing
 
 Bug reports, feature requests, and pull requests are welcome. Run `npm run check` before submitting — it covers TypeScript, linting, formatting, Clippy, Rust formatting, and Rust tests.
