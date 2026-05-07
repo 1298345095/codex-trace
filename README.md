@@ -137,14 +137,6 @@ npm run check        # tsc + oxlint + oxfmt + cargo clippy/fmt/test
 
 Run checks before submitting a pull request.
 
-## Compatibility
-
-Codex Trace reads session files written by the Codex CLI to `~/.codex/sessions/`. It does not invoke the Codex CLI binary at runtime, so Codex CLI flag and subcommand changes have no direct impact on Codex Trace.
-
-### Codex v0.128.0
-
-- **`--full-auto` flag deprecated (PR #20133)**: No impact. Codex Trace never passes `--full-auto` or any other CLI flag to a child process. The flag may appear as recorded metadata in `session_meta` entries, where Codex Trace parses it as structured data only.
-
 ## Contributing
 
 Bug reports, feature requests, and pull requests are welcome. Run `npm run check` before submitting — it covers TypeScript, linting, formatting, Clippy, Rust formatting, and Rust tests.
