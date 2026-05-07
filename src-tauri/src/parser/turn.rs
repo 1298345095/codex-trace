@@ -193,7 +193,13 @@ fn handle_event_msg(
             if turn_id.is_empty() {
                 return;
             }
-            let started_at = entry.timestamp.as_deref().and_then(parse_timestamp_secs);
+            // Prefer turn_start_timestamp from payload (added in Codex v0.128.0 via #19473).
+            // Fall back to the outer JSONL line timestamp for sessions captured before that.
+            let started_at = payload
+                .get("turn_start_timestamp")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as u64)
+                .or_else(|| entry.timestamp.as_deref().and_then(parse_timestamp_secs));
             let mut turn = CodexTurn::new(turn_id.clone());
             turn.started_at = started_at;
             turns.insert(turn_id.clone(), turn);
@@ -302,6 +308,28 @@ fn handle_event_msg(
                     .map(|v| v as u64)
                     .or_else(|| entry.timestamp.as_deref().and_then(parse_timestamp_secs));
                 turn.duration_ms = payload.get("duration_ms").and_then(|v| v.as_u64());
+                // Codex v0.128.0 adds prompt_tokens/completion_tokens/total_tokens to task_complete.
+                // Use these only when no richer token_count event has already populated the turn.
+                if turn.total_tokens.is_none() {
+                    let prompt_tokens = payload.get("prompt_tokens").and_then(|v| v.as_u64());
+                    let completion_tokens =
+                        payload.get("completion_tokens").and_then(|v| v.as_u64());
+                    let total = payload
+                        .get("total_tokens")
+                        .and_then(|v| v.as_u64())
+                        .or_else(|| prompt_tokens.zip(completion_tokens).map(|(p, c)| p + c));
+                    if let Some(total_tokens) = total {
+                        turn.total_tokens = Some(TokenInfo {
+                            input_tokens: prompt_tokens.unwrap_or(0),
+                            cached_input_tokens: 0,
+                            output_tokens: completion_tokens.unwrap_or(0),
+                            reasoning_output_tokens: 0,
+                            total_tokens,
+                            context_window_tokens: None,
+                            model_context_window: 0,
+                        });
+                    }
+                }
             }
         }
 
@@ -916,6 +944,66 @@ mod tests {
         assert_eq!(turns[0].collab_spawns[0].agent_nickname, "Noether");
         assert_eq!(turns[0].tool_calls.len(), 1);
         assert_eq!(turns[0].tool_calls[0].kind, ToolKind::SpawnAgent);
+    }
+
+    // Codex v0.128.0 (#19473): task_started now includes turn_start_timestamp in the payload.
+    // It should be used as started_at in preference to the outer JSONL line timestamp.
+    #[test]
+    fn turn_start_timestamp_in_payload_is_used_as_started_at() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"s1","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            // turn_start_timestamp = 1746000050.0 (earlier than outer line timestamp 1746000060)
+            r#"{"timestamp":"2026-04-30T10:01:00Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1","turn_start_timestamp":1746000050.0}}"#,
+            r#"{"timestamp":"2026-04-30T10:02:00Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746000120.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        // started_at should come from turn_start_timestamp (1746000050), not the line timestamp
+        assert_eq!(turns[0].started_at, Some(1746000050));
+    }
+
+    // Codex v0.128.0 (#19620): turn metadata headers are now ASCII-escaped JSON.
+    // serde_json handles \uXXXX sequences natively; verify non-ASCII in payloads parses correctly.
+    #[test]
+    fn ascii_escaped_unicode_in_task_started_payload_is_parsed_correctly() {
+        // Chinese characters ASCII-escaped as Codex v0.128.0 emits
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"s1","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            r#"{"timestamp":"2026-04-30T10:01:00Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1","turn_start_timestamp":1746000050.0}}"#,
+            "{\"timestamp\":\"2026-04-30T10:01:01Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"\\u4e2d\\u6587\"}}",
+            r#"{"timestamp":"2026-04-30T10:02:00Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746000120.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        // The ASCII-escaped Unicode must be decoded to its actual UTF-8 string value
+        assert_eq!(turns[0].user_message.as_deref(), Some("\u{4e2d}\u{6587}"));
+    }
+
+    #[test]
+    fn reads_token_usage_from_task_complete_v0128() {
+        // Codex v0.128.0 adds prompt_tokens/completion_tokens/total_tokens to task_complete.
+        // These should populate turn.total_tokens when no prior token_count event exists.
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"s1","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:10Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007210.0,"prompt_tokens":1500,"completion_tokens":300,"total_tokens":1800}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        let tokens = turns[0]
+            .total_tokens
+            .as_ref()
+            .expect("token info from task_complete");
+        assert_eq!(tokens.input_tokens, 1500);
+        assert_eq!(tokens.output_tokens, 300);
+        assert_eq!(tokens.total_tokens, 1800);
+        assert_eq!(tokens.cached_input_tokens, 0);
+        assert_eq!(tokens.context_window_tokens, None);
     }
 
     #[test]
