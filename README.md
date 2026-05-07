@@ -49,10 +49,6 @@ Unlike general observability platforms, Codex Trace focuses on local Codex CLI s
 
 Codex Trace is especially useful when building personal AI harnesses and local agent platforms. It helps inspect Codex CLI sessions, understand tool usage, follow collaboration chains, and debug the workflows that power projects like [DovePaw Lite](https://github.com/PixelPaw-Labs/DovePaw-Lite).
 
-## How it works
-
-Codex Trace reads session data exclusively from JSONL files on disk — it does **not** connect to the Codex app-server Unix socket or any live process. Live-tailing is implemented via filesystem watching on the `~/.codex/sessions/` directory tree. This means changes to Codex's internal app-server transport (for example, the Unix socket WebSocket upgrade in Codex v0.128.0) have no impact on Codex Trace.
-
 ## Install
 
 ### Build from source
