@@ -112,7 +112,6 @@ mod tests {
         assert!(parse_timestamp_secs("2026-04-25T10:00:00Z").is_some());
     }
 
-    #[test]
     fn parse_response_item() {
         let line = r#"{"timestamp":"2026-04-25T10:00:00Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1"}}"#;
         let e = RawEntry::parse(line).unwrap();
@@ -152,19 +151,40 @@ mod tests {
     }
 
     /// Codex CLI flags boundary: codex-trace never invokes `codex` at runtime.
-    /// Flags such as `--full-auto`, `--sandbox-profile`, and `--permission-profile`
-    /// are Codex CLI invocation flags; they appear only as data inside JSONL session
-    /// files (e.g. recorded in session_meta) and are never passed by codex-trace to
-    /// any process. This test guards against any future accidental CLI invocation by
-    /// verifying that permission-related session metadata is parsed as JSONL data only.
     #[test]
     fn codex_cli_flags_read_as_jsonl_data_not_invoked() {
-        // A session_meta entry recording the permission profile used by the Codex CLI.
-        // codex-trace reads this as structured data; it never spawns `codex` or passes
-        // these flags to any child process.
         let line = r#"{"timestamp":"2026-04-30T12:00:00Z","type":"session_meta","payload":{"id":"s1","cwd":"/home/user","permission_profile":"full-auto"}}"#;
         let e = RawEntry::parse(line).unwrap();
         assert_eq!(e.entry_type, "session_meta");
         assert_eq!(e.payload["permission_profile"], "full-auto");
+    }
+
+    #[test]
+    fn log_db_log_writer_refactor_does_not_affect_jsonl_session_parser() {
+        // Codex v0.128.0 PRs #19234/#19959 refactored the internal log DB into a
+        // LogWriter interface and fixed its batch flush timing. That subsystem is a
+        // SQLite-backed telemetry store — entirely separate from the JSONL session
+        // files at ~/.codex/sessions/ that codex-trace reads. Verify all four
+        // standard entry types produced by a v0.128.0 session parse correctly.
+        let lines = [
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"v0128-session","timestamp":"2026-04-30T10:00:00Z","cwd":"/tmp","cli_version":"0.128.0","model_provider":"openai"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":"Hello"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:03Z","type":"turn_context","payload":{"model":"gpt-5.4","cwd":"/tmp"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1746007204.0}}"#,
+        ];
+        let expected_types = [
+            "session_meta",
+            "event_msg",
+            "response_item",
+            "turn_context",
+            "event_msg",
+        ];
+        for (line, expected) in lines.iter().zip(expected_types.iter()) {
+            let entry = RawEntry::parse(line).expect("parse failed");
+            assert_eq!(entry.entry_type, *expected, "wrong type for: {line}");
+        }
+        let meta = RawEntry::parse(lines[0]).unwrap();
+        assert_eq!(meta.payload["cli_version"], "0.128.0");
     }
 }
