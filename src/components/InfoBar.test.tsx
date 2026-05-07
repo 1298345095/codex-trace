@@ -29,6 +29,7 @@ function makeSession(overrides: Partial<CodexSession> = {}): CodexSession {
     thread_name: null,
     spawned_worker_ids: [],
     path: "/sessions/2026/04/26/rollout-abc.jsonl",
+    ai_title: null,
     ...overrides,
   };
 }
