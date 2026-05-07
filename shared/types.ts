@@ -69,7 +69,7 @@ export interface CodexTurn {
   started_at: number | null;
   completed_at: number | null;
   duration_ms: number | null;
-  status: "complete" | "aborted" | "ongoing" | "error";
+  status: "complete" | "aborted" | "cancelled" | "ongoing" | "error";
   user_message: string | null;
   agent_messages: AgentMessage[];
   tool_calls: CodexToolCall[];

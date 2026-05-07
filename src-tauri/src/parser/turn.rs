@@ -11,6 +11,7 @@ use super::toolcall::{ToolCall, ToolCallBuilder};
 pub enum TurnStatus {
     Complete,
     Aborted,
+    Cancelled,
     Ongoing,
     Error,
 }
@@ -321,6 +322,28 @@ fn handle_event_msg(
                     .get("reason")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
+                turn.completed_at = payload
+                    .get("completed_at")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| v as u64)
+                    .or_else(|| entry.timestamp.as_deref().and_then(parse_timestamp_secs));
+                turn.duration_ms = payload.get("duration_ms").and_then(|v| v.as_u64());
+            }
+        }
+
+        "inference_stream_cancelled" => {
+            let turn_id_field = payload
+                .get("turn_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or(current_turn_id.as_deref().unwrap_or(""))
+                .to_string();
+            let target_id = if !turn_id_field.is_empty() {
+                turn_id_field
+            } else {
+                current_turn_id.clone().unwrap_or_default()
+            };
+            if let Some(turn) = turns.get_mut(&target_id) {
+                turn.status = TurnStatus::Cancelled;
                 turn.completed_at = payload
                     .get("completed_at")
                     .and_then(|v| v.as_f64())
@@ -893,5 +916,66 @@ mod tests {
         assert_eq!(turns[0].collab_spawns[0].agent_nickname, "Noether");
         assert_eq!(turns[0].tool_calls.len(), 1);
         assert_eq!(turns[0].tool_calls[0].kind, ToolKind::SpawnAgent);
+    }
+
+    #[test]
+    fn inference_stream_cancelled_marks_turn_cancelled() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"sess-1","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:02Z","type":"event_msg","payload":{"type":"agent_message","message":"Working on it...","phase":"commentary"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:03Z","type":"event_msg","payload":{"type":"inference_stream_cancelled","turn_id":"turn-1","completed_at":1746007203.0,"duration_ms":2000}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].status, TurnStatus::Cancelled);
+        assert_eq!(turns[0].completed_at, Some(1746007203));
+        assert_eq!(turns[0].duration_ms, Some(2000));
+    }
+
+    #[test]
+    fn inference_stream_cancelled_falls_back_to_entry_timestamp() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"sess-2","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-2"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:05Z","type":"event_msg","payload":{"type":"inference_stream_cancelled","turn_id":"turn-2"}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].status, TurnStatus::Cancelled);
+        assert!(turns[0].completed_at.is_some());
+    }
+
+    #[test]
+    fn inference_stream_cancelled_uses_current_turn_when_no_turn_id() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"sess-3","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-3"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:04Z","type":"event_msg","payload":{"type":"inference_stream_cancelled"}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].status, TurnStatus::Cancelled);
+    }
+
+    #[test]
+    fn unknown_event_types_are_ignored_gracefully() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-04-30T10:00:00Z","type":"session_meta","payload":{"id":"sess-4","timestamp":"2026-04-30T10:00:00Z"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-4"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:02Z","type":"event_msg","payload":{"type":"some_future_unknown_event","data":"whatever"}}"#,
+            r#"{"timestamp":"2026-04-30T10:00:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-4","completed_at":1746007203.0}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].status, TurnStatus::Complete);
     }
 }

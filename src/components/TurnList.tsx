@@ -21,6 +21,13 @@ interface TurnListProps {
   onSelectTurn: (index: number) => void;
 }
 
+function statusIcon(status: CodexTurn["status"]): string {
+  if (status === "complete") return "✓";
+  if (status === "aborted") return "✗";
+  if (status === "cancelled") return "⊘";
+  return "!";
+}
+
 export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) {
   const listRef = useAutoScroll<HTMLDivElement>(turns.length);
   const selectedRef = useScrollToSelected(selectedIndex);
@@ -160,7 +167,7 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
                 <div className="message__stats">
                   {turn.status !== "ongoing" && (
                     <span className={`message__stat turn-list__status--${turn.status}`}>
-                      {turn.status === "complete" ? "✓" : turn.status === "aborted" ? "✗" : "!"}
+                      {statusIcon(turn.status)}
                     </span>
                   )}
                   {(turn.total_tokens?.total_tokens ?? 0) > 0 && (
