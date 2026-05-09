@@ -20,11 +20,6 @@ html[data-theme="dark"] {
   /* Surfaces */
   --border: #5f5f87;
 
-  /* Model family */
-  --model-opus: #ff5f87;
-  --model-sonnet: #5fafff;
-  --model-haiku: #87d787;
-
   /* Context usage */
   --context-ok: #87d787;
   --context-warn: #ff8700;
@@ -113,11 +108,6 @@ html[data-theme="light"] {
 
   /* Surfaces */
   --border: #d1d5db;
-
-  /* Model family */
-  --model-opus: #be123c;
-  --model-sonnet: #2563eb;
-  --model-haiku: #15803d;
 
   /* Context usage */
   --context-ok: #15803d;
