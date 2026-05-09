@@ -51,7 +51,7 @@ export function truncate(s: string, max: number): string {
 
 /** Extract the encoded project directory key from a session path. */
 export function projectKey(path: string): string {
-  const match = path.match(/[/\\]\.claude[/\\]projects[/\\]([^/\\]+)/);
+  const match = path.match(/[/\\]\.codex[/\\]projects[/\\]([^/\\]+)/);
   return match ? match[1] : "unknown";
 }
 

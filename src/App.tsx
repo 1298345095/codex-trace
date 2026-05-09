@@ -14,6 +14,7 @@ import { KeybindBar } from "./components/KeybindBar";
 import { ViewToolbar } from "./components/ViewToolbar";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { SettingsModal } from "./components/SettingsModal";
+import { useTheme } from "./hooks/useTheme";
 
 function findToolByCallId(tools: CodexToolCall[], callId: string): CodexToolCall | null {
   for (const tool of tools) {
@@ -37,6 +38,7 @@ export function App() {
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [workerPanelWidth, setWorkerPanelWidth] = useState(380);
   const [workerPanelCallId, setWorkerPanelCallId] = useState<string | null>(null);
+  const { themeMode, setThemeMode } = useTheme();
 
   const session = useSession();
   const picker = usePicker();
@@ -263,6 +265,8 @@ export function App() {
 
       {showSettings && (
         <SettingsModal
+          themeMode={themeMode}
+          onThemeModeChange={setThemeMode}
           onClose={() => setShowSettings(false)}
           onSaved={(dir) => {
             discoverSessions(dir);

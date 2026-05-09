@@ -127,7 +127,7 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
 
             {/* Agent (Codex) message */}
             <div
-              className={`message message--claude${isSelected ? " message--selected" : ""}`}
+              className={`message message--codex${isSelected ? " message--selected" : ""}`}
               onClick={() => handleCodexClick(i)}
               role="button"
               tabIndex={0}
@@ -139,7 +139,7 @@ export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) 
                 <span className="message__role-icon">
                   <CodexIcon />
                 </span>
-                <span className="message__role message__role--claude">Codex</span>
+                <span className="message__role message__role--codex">Codex</span>
                 {turn.status === "ongoing" && <OngoingDots />}
                 {hasDetail && (
                   <button

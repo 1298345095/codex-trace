@@ -3,12 +3,21 @@ import { invoke } from "../lib/invoke";
 import { PopoutModal } from "./PopoutModal";
 import type { SettingsResponse } from "../../shared/types";
 
-interface SettingsModalProps {
+import type { ThemeMode } from "../hooks/useTheme";
+
+type SettingsModalProps = Readonly<{
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
   onClose: () => void;
   onSaved: (dir: string) => void;
-}
+}>;
 
-export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
+export function SettingsModal({
+  themeMode,
+  onThemeModeChange,
+  onClose,
+  onSaved,
+}: SettingsModalProps) {
   const [sessionsDir, setSessionsDir] = useState("");
   const [defaultDir, setDefaultDir] = useState("");
   const [error, setError] = useState("");
@@ -68,7 +77,7 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       onClose={onClose}
       header={<span className="settings-modal__title">Settings</span>}
       initialWidth={520}
-      initialHeight={240}
+      initialHeight={260}
     >
       <div className="settings-modal">
         <label className="settings-modal__label" htmlFor="sessions-dir">
@@ -89,6 +98,23 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
           autoFocus
         />
         <p className="settings-modal__hint">Default: {defaultDir}</p>
+
+        <label className="settings-modal__label" htmlFor="theme-mode">
+          Theme
+        </label>
+
+        <select
+          id="theme-mode"
+          className="settings-modal__input"
+          value={themeMode}
+          onChange={(e) => onThemeModeChange(e.target.value as ThemeMode)}
+        >
+          <option value="system">System</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+
+
         {error && <p className="settings-modal__error">{error}</p>}
         <div className="settings-modal__actions">
           <button

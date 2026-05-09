@@ -1,8 +1,5 @@
-/* ============================================================
-   codex-trace — Dark theme
-   ============================================================ */
-
-:root {
+:root,
+html[data-theme="dark"] {
   /* Background */
   --bg: #1a1a2e;
   --bg-surface: #16213e;
@@ -51,7 +48,7 @@
   --token-high: #ff8700;
 
   /* Icons */
-  --icon-claude: #d4a017;
+  --icon-codex: #d4a017;
   --icon-codex: #10a37f;
   --icon-user: #5fafff;
   --icon-system: #8a8aaa;
@@ -81,6 +78,12 @@
   --bg-selected: #1e2a3a;
   --text-bright: #e0e0e0;
   --dim: var(--text-dim);
+
+  /* 这里补两个别名，项目后面有地方会用到 */
+  --fg: var(--text-primary);
+  --text: var(--text-primary);
+  --hover: var(--bg-hover);
+
   --font-sans: "Inter", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Maple Mono NF CN", "Noto Sans Mono CJK SC", "Microsoft YaHei UI", "Microsoft YaHei", ui-monospace, monospace;
 
@@ -89,10 +92,104 @@
   --scrollbar-track: transparent;
 }
 
+/* 浅色主题：新增这一整段 */
+html[data-theme="light"] {
+  /* Background */
+  --bg: #f7f8fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f1f3f8;
+  --bg-hover: #e7ebf3;
+
+  /* Text hierarchy */
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-dim: #6b7280;
+  --text-muted: #9ca3af;
+
+  /* Accents */
+  --accent: #2563eb;
+  --error: #dc2626;
+  --info: #2563eb;
+
+  /* Surfaces */
+  --border: #d1d5db;
+
+  /* Model family */
+  --model-opus: #be123c;
+  --model-sonnet: #2563eb;
+  --model-haiku: #15803d;
+
+  /* Context usage */
+  --context-ok: #15803d;
+  --context-warn: #d97706;
+  --context-crit: #dc2626;
+
+  /* Permission pills */
+  --pill-bypass: #dc2626;
+  --pill-accept-edits: #7c3aed;
+  --pill-plan: #15803d;
+
+  /* Picker */
+  --picker-selected-bg: #e5e7eb;
+
+  /* Ongoing */
+  --ongoing: #16a34a;
+
+  /* Git */
+  --git-branch: #7c3aed;
+
+  /* Token high */
+  --token-high: #d97706;
+
+  /* Icons */
+  --icon-codex: #b45309;
+  --icon-codex: #047857;
+  --icon-user: #2563eb;
+  --icon-system: #6b7280;
+  --icon-warning: #d97706;
+  --icon-thinking: #b45309;
+  --icon-output: #2563eb;
+  --icon-tool: #7c3aed;
+  --icon-hook: #15803d;
+  --icon-tokens: #b45309;
+  --icon-duration: #6b7280;
+  --icon-agents: #2563eb;
+  --icon-spawn: #7c3aed;
+  --icon-search: #2563eb;
+  --icon-edit: #b45309;
+  --icon-read: #15803d;
+  --icon-bash: #7c3aed;
+  --icon-web: #2563eb;
+  --icon-mcp: #7c3aed;
+  --icon-cron: #6b7280;
+  --icon-git: #7c3aed;
+
+  /* Agent panel */
+  --agent-panel: #2563eb;
+
+  /* Aliases & derived */
+  --bg-secondary: var(--bg-surface);
+  --bg-selected: #dbeafe;
+  --text-bright: #111827;
+  --dim: var(--text-dim);
+
+  /* 这几个别名也要有 */
+  --fg: var(--text-primary);
+  --text: var(--text-primary);
+  --hover: var(--bg-hover);
+
+  --font-sans: "Inter", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Maple Mono NF CN", "Noto Sans Mono CJK SC", "Microsoft YaHei UI", "Microsoft YaHei", ui-monospace, monospace;
+
+  /* Misc */
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-track: transparent;
+}
+
 /* ---- Icon colors ---- */
 
-.icon--claude {
-  color: var(--icon-claude);
+.icon--codex {
+  color: var(--icon-codex);
 }
 
 .icon--user {
@@ -585,7 +682,7 @@ body {
 
 .info-bar__session-id {
   font-size: 11px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   opacity: 0.6;
   white-space: nowrap;
   overflow: hidden;
@@ -960,7 +1057,7 @@ body {
   border-left-color: var(--accent);
 }
 
-.message--claude {
+.message--codex {
   border-left-color: var(--text-dim);
 }
 
@@ -994,7 +1091,7 @@ body {
   align-items: center;
 }
 
-.message__claude-icon {
+.message__codex-icon {
   width: 14px;
   height: 14px;
 }
@@ -1008,7 +1105,7 @@ body {
   color: var(--accent);
 }
 
-.message__role--claude {
+.message__role--codex {
   color: var(--text-secondary);
 }
 
@@ -1384,7 +1481,7 @@ body {
   align-items: center;
 }
 
-.detail-item__claude-icon {
+.detail-item__codex-icon {
   width: 13px;
   height: 13px;
 }
@@ -1426,7 +1523,7 @@ body {
 .detail-item__agent-id {
   color: var(--dim);
   font-size: 11px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   opacity: 0.6;
   flex-shrink: 1;
   min-width: 0;
@@ -3287,94 +3384,6 @@ body {
 .tool-call__body--popout .tool-call__json pre {
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-/* ---- Popout Modal ---- */
-
-.popout-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.popout-modal {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  max-width: 95vw;
-  max-height: 95vh;
-}
-
-.popout-modal__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  min-width: 0;
-}
-
-.popout-modal__name {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.popout-modal__close {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 18px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.popout-modal__close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.popout-modal__body {
-  flex: 1;
-  overflow: auto;
-  padding: 4px 0;
-  min-height: 0;
-  min-width: 0;
-}
-
-.popout-modal__resize-handle {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  height: 16px;
-  cursor: nwse-resize;
-}
-
-.popout-modal__resize-handle::after {
-  content: "";
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--text-dim);
-  border-bottom: 2px solid var(--text-dim);
-  opacity: 0.5;
 }
 
 .tool-call__patch-type {
