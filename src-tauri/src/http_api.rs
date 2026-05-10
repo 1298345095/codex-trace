@@ -196,8 +196,7 @@ async fn api_discover_sessions(
     Json(body): Json<DiscoverBody>,
 ) -> Response {
     let app_state = app_state(&state);
-    let dir = std::path::Path::new(&body.dir);
-    let mut sessions = match crate::parser::discover::discover_sessions(dir) {
+    let mut sessions = match app_state.discover_sessions_cached(&body.dir) {
         Ok(s) => s,
         Err(e) => return err_response(axum::http::StatusCode::INTERNAL_SERVER_ERROR, e),
     };

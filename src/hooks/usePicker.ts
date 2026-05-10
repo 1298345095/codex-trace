@@ -49,8 +49,17 @@ export function usePicker() {
     });
   }, []);
 
-  useTauriEvent<{ sessions: CodexSessionInfo[] }>("picker-refresh", (payload) => {
-    setState((prev) => ({ ...prev, sessions: payload.sessions }));
+  // picker-refresh carries no session data — the watcher sends only a lightweight
+  // signal. Re-fetch via the API so the expensive discover_sessions scan runs
+  // only on demand and is coalesced by the server-side cache.
+  useTauriEvent("picker-refresh", () => {
+    setState((prev) => {
+      if (!prev.sessionsDir) return prev;
+      invoke<CodexSessionInfo[]>("list_sessions", { sessionsDir: prev.sessionsDir })
+        .then((sessions) => setState((s) => ({ ...s, sessions })))
+        .catch(() => {});
+      return prev;
+    });
   });
 
   useEffect(() => {

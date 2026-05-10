@@ -6,11 +6,10 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 
-use crate::parser::discover::CodexSessionInfo;
 use crate::parser::session::parse_session;
 use crate::state::AppState;
 
-const WATCHER_DEBOUNCE: Duration = Duration::from_millis(300);
+const WATCHER_DEBOUNCE: Duration = Duration::from_millis(1000);
 
 fn run_debounce_loop(
     rx: std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>,
@@ -150,12 +149,11 @@ pub fn start_session_watcher(
     }
 }
 
-#[derive(Clone, serde::Serialize)]
-struct PickerRefreshPayload {
-    sessions: Vec<CodexSessionInfo>,
-}
-
 /// Start watching the sessions directory for new/changed files.
+/// When changes are detected the watcher broadcasts a lightweight `picker-refresh`
+/// signal with no payload. Clients are responsible for fetching the updated
+/// session list via the `list_sessions` / `/api/sessions` endpoint, which uses
+/// a short-lived cache to coalesce concurrent re-fetches.
 pub fn start_picker_watcher(
     sessions_dir: String,
     state: Arc<AppState>,
@@ -193,27 +191,18 @@ pub fn start_picker_watcher(
         );
     });
 
-    let dir_clone = sessions_dir;
     tokio::spawn(async move {
         loop {
             tokio::select! {
                 _ = stop_rx.recv() => break,
                 Some(()) = signal_rx.recv() => {
-                    let dir = std::path::Path::new(&dir_clone);
-                    let mut sessions = match crate::parser::discover::discover_sessions(dir) {
-                        Ok(s) => s,
-                        Err(_) => continue,
-                    };
-
-                    state.apply_watched_ongoing(&mut sessions);
-
-                    let payload = PickerRefreshPayload { sessions };
-                    if let Ok(json) = serde_json::to_string(&payload) {
-                        state.broadcast("picker-refresh", &json);
-                    }
+                    // Send a lightweight signal — no session data embedded.
+                    // Clients call list_sessions to fetch fresh data; the
+                    // server-side cache coalesces concurrent requests.
+                    state.broadcast("picker-refresh", "{}");
 
                     if let Some(ref app_handle) = app {
-                        let _ = app_handle.emit("picker-refresh", payload);
+                        let _ = app_handle.emit("picker-refresh", serde_json::json!({}));
                     }
                 }
             }
