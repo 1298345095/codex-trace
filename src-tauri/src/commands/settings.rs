@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 use tauri::State;
 
@@ -29,7 +31,7 @@ pub fn build_settings_response(settings: &Settings) -> SettingsResponse {
 }
 
 #[tauri::command]
-pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsResponse, String> {
+pub async fn get_settings(state: State<'_, Arc<AppState>>) -> Result<SettingsResponse, String> {
     let guard = state.settings.lock().map_err(|e| e.to_string())?;
     Ok(build_settings_response(&guard))
 }
@@ -37,7 +39,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsResponse
 #[tauri::command]
 pub async fn set_sessions_dir(
     path: Option<String>,
-    state: State<'_, AppState>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<SettingsResponse, String> {
     if let Some(ref p) = path {
         let pb = std::path::PathBuf::from(p);

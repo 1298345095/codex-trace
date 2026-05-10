@@ -1,11 +1,14 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 
 use crate::parser::discover::CodexSessionInfo;
 use crate::parser::session::parse_session;
+use crate::state::AppState;
 
 const WATCHER_DEBOUNCE: Duration = Duration::from_millis(300);
 
@@ -69,7 +72,11 @@ fn is_related_session_path(changed_path: &Path, session_file: &Path) -> bool {
 }
 
 /// Start watching a session JSONL file for changes.
-pub fn start_session_watcher(path: String, app: AppHandle) -> WatcherHandle {
+pub fn start_session_watcher(
+    path: String,
+    state: Arc<AppState>,
+    app: Option<AppHandle>,
+) -> WatcherHandle {
     let (stop_tx, mut stop_rx) = mpsc::channel::<()>(1);
     let (signal_tx, mut signal_rx) = mpsc::channel::<()>(4);
     let (thread_stop_tx, thread_stop_rx) = std::sync::mpsc::sync_channel::<()>(1);
@@ -105,7 +112,7 @@ pub fn start_session_watcher(path: String, app: AppHandle) -> WatcherHandle {
     });
 
     let path_for_rebuild = path.clone();
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         let mut prev_ongoing = false;
 
         loop {
@@ -119,20 +126,17 @@ pub fn start_session_watcher(path: String, app: AppHandle) -> WatcherHandle {
                     };
 
                     let ongoing = session.is_ongoing;
-
-                    if let Some(state) = app.try_state::<crate::state::AppState>() {
-                        state.set_watched_ongoing(path_for_rebuild.clone(), ongoing);
-                    }
+                    state.set_watched_ongoing(path_for_rebuild.clone(), ongoing);
 
                     let payload = SessionUpdatePayload { session };
-
-                    if let Some(state) = app.try_state::<crate::state::AppState>() {
-                        if let Ok(json) = serde_json::to_string(&payload) {
-                            state.broadcast("session-update", &json);
-                        }
+                    if let Ok(json) = serde_json::to_string(&payload) {
+                        state.broadcast("session-update", &json);
                     }
 
-                    let _ = app.emit("session-update", payload);
+                    if let Some(ref app_handle) = app {
+                        let _ = app_handle.emit("session-update", payload);
+                    }
+
                     prev_ongoing = ongoing;
                 }
             }
@@ -152,7 +156,11 @@ struct PickerRefreshPayload {
 }
 
 /// Start watching the sessions directory for new/changed files.
-pub fn start_picker_watcher(sessions_dir: String, app: AppHandle) -> WatcherHandle {
+pub fn start_picker_watcher(
+    sessions_dir: String,
+    state: Arc<AppState>,
+    app: Option<AppHandle>,
+) -> WatcherHandle {
     let (stop_tx, mut stop_rx) = mpsc::channel::<()>(1);
     let (signal_tx, mut signal_rx) = mpsc::channel::<()>(4);
     let (thread_stop_tx, thread_stop_rx) = std::sync::mpsc::sync_channel::<()>(1);
@@ -186,7 +194,7 @@ pub fn start_picker_watcher(sessions_dir: String, app: AppHandle) -> WatcherHand
     });
 
     let dir_clone = sessions_dir;
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         loop {
             tokio::select! {
                 _ = stop_rx.recv() => break,
@@ -197,19 +205,16 @@ pub fn start_picker_watcher(sessions_dir: String, app: AppHandle) -> WatcherHand
                         Err(_) => continue,
                     };
 
-                    if let Some(state) = app.try_state::<crate::state::AppState>() {
-                        state.apply_watched_ongoing(&mut sessions);
-                    }
+                    state.apply_watched_ongoing(&mut sessions);
 
                     let payload = PickerRefreshPayload { sessions };
-
-                    if let Some(state) = app.try_state::<crate::state::AppState>() {
-                        if let Ok(json) = serde_json::to_string(&payload) {
-                            state.broadcast("picker-refresh", &json);
-                        }
+                    if let Ok(json) = serde_json::to_string(&payload) {
+                        state.broadcast("picker-refresh", &json);
                     }
 
-                    let _ = app.emit("picker-refresh", payload);
+                    if let Some(ref app_handle) = app {
+                        let _ = app_handle.emit("picker-refresh", payload);
+                    }
                 }
             }
         }

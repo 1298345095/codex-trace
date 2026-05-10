@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use tauri::{AppHandle, State};
 
 use crate::parser::session::parse_session;
@@ -23,17 +25,17 @@ pub async fn load_session(path: String) -> Result<crate::parser::session::CodexS
 pub async fn watch_session(
     path: String,
     app: AppHandle,
-    state: State<'_, AppState>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
     let session = load_session_from_path(&path)?;
     state.stop_session_watcher()?;
     state.set_watched_ongoing(path.clone(), session.is_ongoing);
-    let handle = start_session_watcher(path, app);
+    let handle = start_session_watcher(path, state.inner().clone(), Some(app));
     state.set_session_watcher(handle)
 }
 
 #[tauri::command]
-pub async fn unwatch_session(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn unwatch_session(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     state.clear_watched_ongoing();
     state.stop_session_watcher()
 }
