@@ -7,14 +7,30 @@ import type { ThemeMode } from "../hooks/useTheme";
 
 type SettingsModalProps = Readonly<{
   themeMode: ThemeMode;
+  fontFamily: string;
+  fontSize: number;
+  defaultFontFamily: string;
+  defaultFontSize: number;
+  minFontSize: number;
+  maxFontSize: number;
   onThemeModeChange: (mode: ThemeMode) => void;
+  onFontFamilyChange: (fontFamily: string) => void;
+  onFontSizeChange: (fontSize: number) => void;
   onClose: () => void;
   onSaved: (dir: string) => void;
 }>;
 
 export function SettingsModal({
   themeMode,
+  fontFamily,
+  fontSize,
+  defaultFontFamily,
+  defaultFontSize,
+  minFontSize,
+  maxFontSize,
   onThemeModeChange,
+  onFontFamilyChange,
+  onFontSizeChange,
   onClose,
   onSaved,
 }: SettingsModalProps) {
@@ -77,7 +93,7 @@ export function SettingsModal({
       onClose={onClose}
       header={<span className="settings-modal__title">Settings</span>}
       initialWidth={520}
-      initialHeight={260}
+      initialHeight={390}
     >
       <div className="settings-modal">
         <label className="settings-modal__label" htmlFor="sessions-dir">
@@ -114,6 +130,39 @@ export function SettingsModal({
           <option value="light">Light</option>
         </select>
 
+        <label className="settings-modal__label" htmlFor="font-family">
+          Font
+        </label>
+
+        <input
+          id="font-family"
+          className="settings-modal__input"
+          type="text"
+          value={fontFamily}
+          onChange={(e) => onFontFamilyChange(e.target.value)}
+          placeholder={defaultFontFamily}
+          spellCheck={false}
+        />
+        <p className="settings-modal__hint">CSS font-family value</p>
+
+        <label className="settings-modal__label" htmlFor="font-size">
+          Font Size
+        </label>
+
+        <div className="settings-modal__inline-control">
+          <input
+            id="font-size"
+            className="settings-modal__input settings-modal__input--number"
+            type="number"
+            value={fontSize}
+            min={minFontSize}
+            max={maxFontSize}
+            step={1}
+            onChange={(e) => onFontSizeChange(e.target.valueAsNumber)}
+          />
+          <span className="settings-modal__unit">px</span>
+        </div>
+        <p className="settings-modal__hint">Default: {defaultFontSize}px</p>
 
         {error && <p className="settings-modal__error">{error}</p>}
         <div className="settings-modal__actions">
@@ -122,7 +171,7 @@ export function SettingsModal({
             onClick={handleReset}
             disabled={saving}
           >
-            Reset to Default
+            Reset Directory
           </button>
           <button
             className="settings-modal__btn settings-modal__btn--primary"

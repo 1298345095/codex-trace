@@ -44,8 +44,8 @@ export function TurnDetail({
   const contextTitle =
     tokenInfo && tokenInfo.context_window_tokens !== null
       ? `${formatTokens(tokenInfo.context_window_tokens)} / ${formatTokens(
-          tokenInfo.model_context_window,
-        )} context tokens`
+        tokenInfo.model_context_window,
+      )} context tokens`
       : undefined;
 
   return (
@@ -58,7 +58,17 @@ export function TurnDetail({
           <CodexIcon />
         </span>
         <span className="message-detail__title">Codex</span>
-        {model && <span style={{ color: modelColor, fontWeight: 600, fontSize: 12 }}>{model}</span>}
+        {model && (
+          <span
+            style={{
+              color: modelColor,
+              fontWeight: 600,
+              fontSize: "calc(var(--app-font-size) * 0.923)",
+            }}
+          >
+            {model}
+          </span>
+        )}
         {turn.status === "ongoing" && <OngoingDots count={3} />}
         {(contextLeftPercent !== null || metaParts.length > 0) && (
           <div className="message-detail__meta">

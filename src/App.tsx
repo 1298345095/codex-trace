@@ -15,6 +15,7 @@ import { ViewToolbar } from "./components/ViewToolbar";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { SettingsModal } from "./components/SettingsModal";
 import { useTheme } from "./hooks/useTheme";
+import { useFontPreference } from "./hooks/useFontPreference";
 
 function findToolByCallId(tools: CodexToolCall[], callId: string): CodexToolCall | null {
   for (const tool of tools) {
@@ -39,6 +40,16 @@ export function App() {
   const [workerPanelWidth, setWorkerPanelWidth] = useState(380);
   const [workerPanelCallId, setWorkerPanelCallId] = useState<string | null>(null);
   const { themeMode, setThemeMode } = useTheme();
+  const {
+    fontFamily,
+    fontSize,
+    setFontFamily,
+    setFontSize,
+    defaultFontFamily,
+    defaultFontSize,
+    minFontSize,
+    maxFontSize,
+  } = useFontPreference();
 
   const session = useSession();
   const picker = usePicker();
@@ -266,7 +277,15 @@ export function App() {
       {showSettings && (
         <SettingsModal
           themeMode={themeMode}
+          fontFamily={fontFamily}
+          fontSize={fontSize}
+          defaultFontFamily={defaultFontFamily}
+          defaultFontSize={defaultFontSize}
+          minFontSize={minFontSize}
+          maxFontSize={maxFontSize}
           onThemeModeChange={setThemeMode}
+          onFontFamilyChange={setFontFamily}
+          onFontSizeChange={setFontSize}
           onClose={() => setShowSettings(false)}
           onSaved={(dir) => {
             discoverSessions(dir);
