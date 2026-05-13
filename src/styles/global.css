@@ -5,6 +5,8 @@ html[data-theme="dark"] {
   --bg-surface: #16213e;
   --bg-elevated: #222244;
   --bg-hover: #2a2a4a;
+  --inline-code-bg: var(--bg-elevated);
+  --code-block-bg: var(--bg-elevated);
 
   /* Text hierarchy */
   --text-primary: #d0d0d0;
@@ -99,6 +101,8 @@ html[data-theme="light"] {
   --bg-surface: #ffffff;
   --bg-elevated: #f4f4f4;
   --bg-hover: #eeeeee;
+  --inline-code-bg: #e2e5ea;
+  --code-block-bg: #eceff3;
 
   /* Text hierarchy */
   --text-primary: #0b1220;
@@ -1349,14 +1353,14 @@ body {
 }
 
 .message-detail__text code {
-  background: var(--bg-elevated);
+  background: var(--inline-code-bg);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: calc(var(--app-font-size) * 0.923);
 }
 
 .message-detail__text pre {
-  background: var(--bg-elevated);
+  background: var(--code-block-bg);
   padding: 12px;
   border-radius: 4px;
   overflow-x: auto;
@@ -3543,7 +3547,7 @@ body {
 }
 
 .turn-detail__markdown pre {
-  background: var(--bg-elevated);
+  background: var(--code-block-bg);
   border-radius: 4px;
   padding: 12px;
   overflow-x: auto;
@@ -3551,7 +3555,7 @@ body {
 }
 
 .turn-detail__markdown code {
-  background: var(--bg-elevated);
+  background: var(--inline-code-bg);
   border-radius: 3px;
   padding: 1px 4px;
   font-size: calc(var(--app-font-size) * 0.923);
