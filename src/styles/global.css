@@ -95,77 +95,76 @@ html[data-theme="dark"] {
 /* 浅色主题：新增这一整段 */
 html[data-theme="light"] {
   /* Background */
-  --bg: #f7f8fb;
+  --bg: #fafafa;
   --bg-surface: #ffffff;
-  --bg-elevated: #f1f3f8;
-  --bg-hover: #e7ebf3;
+  --bg-elevated: #f4f4f4;
+  --bg-hover: #eeeeee;
 
   /* Text hierarchy */
-  --text-primary: #1f2937;
-  --text-secondary: #4b5563;
-  --text-dim: #6b7280;
-  --text-muted: #9ca3af;
+  --text-primary: #0b1220;
+  --text-secondary: #2f343b;
+  --text-dim: #515861;
+  --text-muted: #6f7782;
 
   /* Accents */
-  --accent: #2563eb;
-  --error: #dc2626;
-  --info: #2563eb;
+  --accent: #1d5fd7;
+  --error: #c92a2a;
+  --info: #1677b9;
 
   /* Surfaces */
-  --border: #d1d5db;
+  --border: #b7bcc4;
 
   /* Context usage */
-  --context-ok: #15803d;
-  --context-warn: #d97706;
-  --context-crit: #dc2626;
+  --context-ok: #137a45;
+  --context-warn: #b96b00;
+  --context-crit: #c92a2a;
 
   /* Permission pills */
-  --pill-bypass: #dc2626;
-  --pill-accept-edits: #7c3aed;
-  --pill-plan: #15803d;
+  --pill-bypass: #c92a2a;
+  --pill-accept-edits: #6f42c1;
+  --pill-plan: #137a45;
 
   /* Picker */
-  --picker-selected-bg: #e5e7eb;
+  --picker-selected-bg: #eeeeee;
 
   /* Ongoing */
-  --ongoing: #16a34a;
+  --ongoing: #178a4a;
 
   /* Git */
-  --git-branch: #7c3aed;
+  --git-branch: #6f42c1;
 
   /* Token high */
-  --token-high: #d97706;
+  --token-high: #b96b00;
 
   /* Icons */
-  --icon-codex: #b45309;
-  --icon-codex: #047857;
-  --icon-user: #2563eb;
-  --icon-system: #6b7280;
-  --icon-warning: #d97706;
-  --icon-thinking: #b45309;
-  --icon-output: #2563eb;
-  --icon-tool: #7c3aed;
-  --icon-hook: #15803d;
-  --icon-tokens: #b45309;
-  --icon-duration: #6b7280;
-  --icon-agents: #2563eb;
-  --icon-spawn: #7c3aed;
-  --icon-search: #2563eb;
-  --icon-edit: #b45309;
-  --icon-read: #15803d;
-  --icon-bash: #7c3aed;
-  --icon-web: #2563eb;
-  --icon-mcp: #7c3aed;
-  --icon-cron: #6b7280;
-  --icon-git: #7c3aed;
+  --icon-codex: #0f766e;
+  --icon-user: #1d5fd7;
+  --icon-system: #6b7888;
+  --icon-warning: #b96b00;
+  --icon-thinking: #a16207;
+  --icon-output: #1677b9;
+  --icon-tool: #6f42c1;
+  --icon-hook: #137a45;
+  --icon-tokens: #a16207;
+  --icon-duration: #6b7888;
+  --icon-agents: #1677b9;
+  --icon-spawn: #6f42c1;
+  --icon-search: #1d5fd7;
+  --icon-edit: #a16207;
+  --icon-read: #137a45;
+  --icon-bash: #6f42c1;
+  --icon-web: #1677b9;
+  --icon-mcp: #6f42c1;
+  --icon-cron: #6b7888;
+  --icon-git: #6f42c1;
 
   /* Agent panel */
-  --agent-panel: #2563eb;
+  --agent-panel: #1677b9;
 
   /* Aliases & derived */
   --bg-secondary: var(--bg-surface);
-  --bg-selected: #dbeafe;
-  --text-bright: #111827;
+  --bg-selected: #ebebeb;
+  --text-bright: #020617;
   --dim: var(--text-dim);
 
   /* 这几个别名也要有 */
@@ -182,7 +181,7 @@ html[data-theme="light"] {
   --app-font-size: 13px;
 
   /* Misc */
-  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb: #a7adb5;
   --scrollbar-track: transparent;
 }
 
