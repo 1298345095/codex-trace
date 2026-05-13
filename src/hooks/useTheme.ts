@@ -11,9 +11,7 @@ function getSystemTheme(): ResolvedTheme {
     return "dark";
   }
 
-  return globalThis.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function resolveTheme(mode: ThemeMode): ResolvedTheme {

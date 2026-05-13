@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { CodexTurn } from "../../shared/types";
 import { formatDuration, formatTokens } from "../../shared/format";
 import { formatExactTime } from "../lib/format";
@@ -19,6 +19,8 @@ interface TurnListProps {
   turns: CodexTurn[];
   selectedIndex: number;
   onSelectTurn: (index: number) => void;
+  expandAllRevision?: number;
+  collapseAllRevision?: number;
 }
 
 function statusIcon(status: CodexTurn["status"]): string {
@@ -28,12 +30,31 @@ function statusIcon(status: CodexTurn["status"]): string {
   return "!";
 }
 
-export function TurnList({ turns, selectedIndex, onSelectTurn }: TurnListProps) {
+export function TurnList({
+  turns,
+  selectedIndex,
+  onSelectTurn,
+  expandAllRevision = 0,
+  collapseAllRevision = 0,
+}: TurnListProps) {
   const listRef = useAutoScroll<HTMLDivElement>(turns.length);
   const selectedRef = useScrollToSelected(selectedIndex);
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set());
   const [expandedCodex, setExpandedCodex] = useState<Set<number>>(new Set());
   const clickTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    if (expandAllRevision === 0) return;
+    const all = new Set(Array.from({ length: turns.length }, (_, i) => i));
+    setExpandedUsers(all);
+    setExpandedCodex(all);
+  }, [expandAllRevision, turns.length]);
+
+  useEffect(() => {
+    if (collapseAllRevision === 0) return;
+    setExpandedUsers(new Set());
+    setExpandedCodex(new Set());
+  }, [collapseAllRevision]);
 
   const toggleUser = useCallback((i: number) => {
     setExpandedUsers((prev) => {

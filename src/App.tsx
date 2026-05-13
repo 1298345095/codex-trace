@@ -39,6 +39,8 @@ export function App() {
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [workerPanelWidth, setWorkerPanelWidth] = useState(380);
   const [workerPanelCallId, setWorkerPanelCallId] = useState<string | null>(null);
+  const [listExpandAllRevision, setListExpandAllRevision] = useState(0);
+  const [listCollapseAllRevision, setListCollapseAllRevision] = useState(0);
   const { themeMode, setThemeMode } = useTheme();
   const {
     fontFamily,
@@ -119,10 +121,22 @@ export function App() {
       if (currentTurns[selectedTurn]) {
         addAllTools(currentTurns[selectedTurn].tool_calls.map((_, i) => i));
       }
+    } else if (view === "list") {
+      setListExpandAllRevision((revision) => revision + 1);
+    } else {
+      setCollapsedDates(new Set());
     }
   }, [view, session.session, selectedTurn, addAllTools]);
 
-  const collapseAll = useCallback(() => clearTools(), [clearTools]);
+  const collapseAll = useCallback(() => {
+    if (view === "detail") {
+      clearTools();
+    } else if (view === "list") {
+      setListCollapseAllRevision((revision) => revision + 1);
+    } else {
+      setCollapsedDates(new Set(picker.allSessions.map((info) => info.date_group || "unknown")));
+    }
+  }, [view, clearTools, picker.allSessions]);
 
   const goToSessions = useCallback(() => setView("picker"), []);
 
@@ -233,6 +247,8 @@ export function App() {
             <TurnList
               turns={turns}
               selectedIndex={selectedTurn}
+              expandAllRevision={listExpandAllRevision}
+              collapseAllRevision={listCollapseAllRevision}
               onSelectTurn={(i) => {
                 setSelectedTurn(i);
                 setView("detail");

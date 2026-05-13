@@ -11,7 +11,9 @@ interface ViewToolbarProps {
 }
 
 function scrollContent(to: "top" | "bottom") {
-  const el = document.querySelector(".main-content");
+  const el = document.querySelector<HTMLElement>(
+    ".main-content .turn-detail__body, .main-content .message-list, .main-content .picker__list",
+  );
   if (el) el.scrollTo({ top: to === "top" ? 0 : el.scrollHeight, behavior: "smooth" });
 }
 

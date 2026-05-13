@@ -81,6 +81,31 @@ describe("TurnList", () => {
     expect(screen.getByText("Hi there!")).toBeInTheDocument();
   });
 
+  it("expands and collapses all message previews from toolbar revisions", () => {
+    const turns = [makeTurn()];
+    const { container, rerender } = render(
+      <TurnList turns={turns} selectedIndex={-1} onSelectTurn={vi.fn()} />,
+    );
+
+    expect(container.querySelectorAll(".message__content--collapsed")).toHaveLength(2);
+
+    rerender(
+      <TurnList turns={turns} selectedIndex={-1} onSelectTurn={vi.fn()} expandAllRevision={1} />,
+    );
+    expect(container.querySelectorAll(".message__content--collapsed")).toHaveLength(0);
+
+    rerender(
+      <TurnList
+        turns={turns}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+        expandAllRevision={1}
+        collapseAllRevision={1}
+      />,
+    );
+    expect(container.querySelectorAll(".message__content--collapsed")).toHaveLength(2);
+  });
+
   it("shows tool count for a single tool call", () => {
     render(
       <TurnList

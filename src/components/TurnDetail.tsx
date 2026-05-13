@@ -44,8 +44,8 @@ export function TurnDetail({
   const contextTitle =
     tokenInfo && tokenInfo.context_window_tokens !== null
       ? `${formatTokens(tokenInfo.context_window_tokens)} / ${formatTokens(
-        tokenInfo.model_context_window,
-      )} context tokens`
+          tokenInfo.model_context_window,
+        )} context tokens`
       : undefined;
 
   return (
